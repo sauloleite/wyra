@@ -13,11 +13,12 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
-[project.dependencies]
-cryptography = "*"
-openai = "*"
-pytest = "*"
-pytest-cov = "*"
+dependencies = [
+    "cryptography",
+    "openai",
+    "pytest",
+    "pytest-cov"
+]
 
 [project.urls]
 Homepage = "https://github.com/sauloleite/wyra"
