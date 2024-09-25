@@ -1,6 +1,6 @@
 [project]
 name = "wyra"
-version = "0.0.2"
+version = "0.0.1"
 authors = [
   { name="Saulo Leite", email="sjoldeveloper@gmail.com" },
 ]
