@@ -1,5 +1,9 @@
-# wyra
+# Wyra
+
 Wyra is a Python library designed to create and format data for fine-tuning OpenAI models, specifically tailored for Azure OpenAI services. It simplifies the process of converting text content into the JSON Lines (JSONL) format required for fine-tuning conversational AI models.
+
+"Wyra" is a term used in indigenous languages to refer to a bird or bird species. Just like a bird, this library will help you "fly" through fine-tuning. Enjoy!
+
 ## Features
 
 - **Easy Integration**: Seamlessly integrates with Azure OpenAI services.
@@ -23,26 +27,26 @@ Here's a basic example of how to use Wyra:
 from wyra import FineTuningDataMaker
 
 # Initialize the data maker
-fine_tunner = FineTuningDataMaker()
+fine_tuning_creator = FineTuningDataMaker()
 
 # Sample content to format
 content = "Your text content here."
 
 # Create and format data
-formatted_data = fine_tunner.format_data(content)
+formatted_data = fine_tuning_creator.format_data(content)
 
 print(formatted_data)
+
 # Save JSONL data to a file
 with open('formatted_data.jsonl', 'w') as file:
-    for item in jsonl_data:
-        file.write(f"{item}\n")
-
+    file.write(formatted_data)
 ```
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](https://github.com/sauloleite/wyra/blob/main/LICENSE) file for details.
 
 ## Contact
 
 For any questions or feedback, please open an issue on our [GitHub repository](https://github.com/sauloleite/wyra).
+
