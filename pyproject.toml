@@ -1,6 +1,6 @@
 [project]
 name = "wyra"
-version = "0.0.1"
+version = "0.0.2"
 authors = [
   { name="Saulo Leite", email="sjoldeveloper@gmail.com" },
 ]
@@ -14,10 +14,10 @@ classifiers = [
 ]
 
 [project.dependencies]
-dependencies = [
-    "cryptography",
-    "openai"
-]
+cryptography = "*"
+openai = "*"
+pytest = "*"
+pytest-cov = "*"
 
 [project.urls]
 Homepage = "https://github.com/sauloleite/wyra"
