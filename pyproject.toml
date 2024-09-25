@@ -14,10 +14,10 @@ classifiers = [
 ]
 
 [project.dependencies]
-cryptography = "*"
-openai = "*"
-pytest = "*"
-pytest-cov = "*"
+dependencies = [
+    "cryptography",
+    "openai"
+]
 
 [project.urls]
 Homepage = "https://github.com/sauloleite/wyra"
