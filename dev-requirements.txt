@@ -1,0 +1,4 @@
+cryptography
+openai
+pytest
+pytest-cov
