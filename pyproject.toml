@@ -15,9 +15,7 @@ classifiers = [
 
 dependencies = [
     "cryptography",
-    "openai",
-    "pytest",
-    "pytest-cov"
+    "openai"
 ]
 
 [project.urls]
