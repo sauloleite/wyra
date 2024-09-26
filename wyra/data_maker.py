@@ -40,6 +40,7 @@ class FineTuningDataMaker:
             '{"role": "user", "content": "<user question>"}, '
             '{"role": "assistant", "content": "<assistant response>"}]}'
             "Return only the JSONL-formatted data without any additional text."
+            "If you receive inputs in different languages, please return them in the same language."
             "\n\nHere is the content to be formatted:\n\n" + content
         )
 
