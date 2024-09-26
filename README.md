@@ -24,6 +24,7 @@ pip install wyra
 Here's a basic example of how to use Wyra:
 
 ```python
+import json
 from wyra import FineTuningDataMaker
 
 # Initialize the data maker
@@ -34,8 +35,6 @@ content = "Your text content here."
 
 # Create and format data
 formatted_data = fine_tuning_creator.format_data(content)
-
-print(formatted_data)
 
 # Save JSONL data to a file
 with open('formatted_data.jsonl', 'w') as file:
