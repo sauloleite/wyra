@@ -1,5 +1,3 @@
-# test_data_maker.py
-
 import pytest
 from unittest.mock import MagicMock, patch
 from wyra import FineTuningDataMaker
