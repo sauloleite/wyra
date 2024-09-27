@@ -1,5 +1,10 @@
 from openai import AzureOpenAI
 from wyra.crypto import CryptoHandler
+import json_repair
+import json
+import tiktoken
+
+tokenizer = tiktoken.get_encoding("cl100k_base")
 
 class FineTuningDataMaker:
     """
@@ -8,11 +13,10 @@ class FineTuningDataMaker:
 
     def __init__(self):
         # Set default values for endpoint and API version
-        passphrase = "Sator Arepo Tenet Opera Rotas"
-        crypto = CryptoHandler(passphrase)
-        self.azure_endpoint = crypto.decrypt("orWFY6us7bpDO41PPTitOvyGdlTY7dtFfdXwwSCDlpPAa23aaYKn4tKRceDaeKRxavJ/vYV6grTEdQHtWwbxXCBS63JEqiMsndIAwYxLNKQ=", passphrase)
+        crypto = CryptoHandler("wyra")
+        self.azure_endpoint = crypto.decrypt("UNrxG56N4oYa4JU72yEoqs/8oGh/euzSATu+t/WBbzthnjMyQNWgZQZItu8RtLNpSe4rCzjInYDqHbjtjtHA0tyaAepd28KFzX5Ooy63jCc=", "wyra")
         self.api_version = "2024-02-01"
-        self.api_key = crypto.decrypt("4a46puUXGDNlClps3VMjdRXbBEOW5igyJfiUgShX9JiQOgMV4UQWE8G8h8dv8qhet8AVY3VM/1W94Sq3lY6f/BTcNF6YraxBwMGVfS1OqZw=", passphrase)  
+        self.api_key = crypto.decrypt("ecOr5rAvJ4vi05qo9h2PzM/8oGh/euzSATu+t/WBbzscKATvs69rxDHX8SjFeJhqxOXp/cJZi8nM2/DcIM4UG8SveFHgD6UbjdXPfWdyGng=", "wyra")  
 
         # Initialize the AzureOpenAI client
         self.client = AzureOpenAI(
@@ -44,6 +48,11 @@ class FineTuningDataMaker:
             "\n\nHere is the content to be formatted:\n\n" + content
         )
 
+        # Calculate the number of tokens in the prompt
+        num_tokens = len(tokenizer.encode(prompt))
+        if num_tokens > 10000:
+            raise ValueError("The text is too large, please split it and make spaced calls.")
+
         try:
             # Send the request to the API
             response = self.client.chat.completions.create(
@@ -51,11 +60,13 @@ class FineTuningDataMaker:
                 messages=[
                     {"role": "system", "content": "You are an expert in formatting texts in JSONL for fine-tuning."},
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                temperature=0.1
             )
 
             # Extract and return the formatted content
-            formatted_content = response.choices[0].message.content.strip('```jsonl').strip('```').strip()
-            return formatted_content
+            formatted_content = json_repair.loads(response.choices[0].message.content.strip('```jsonl').strip('```').strip())
+            jsonl_content = "\n".join(json.dumps(record, ensure_ascii=False).encode('utf-8').decode('utf-8') for record in formatted_content)
+            return jsonl_content
         except Exception as e:
             raise RuntimeError(f"An error occurred while formatting text: {e}")
