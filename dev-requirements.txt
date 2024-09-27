@@ -2,3 +2,6 @@ cryptography
 openai
 pytest
 pytest-cov
+tiktoken
+json
+json-repair
