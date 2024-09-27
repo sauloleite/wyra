@@ -1,6 +1,6 @@
 [project]
 name = "wyra"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="Saulo Leite", email="sjoldeveloper@gmail.com" },
 ]
@@ -17,7 +17,6 @@ dependencies = [
     "cryptography",
     "openai",
     "tiktoken",
-    "json",
     "json-repair"
 ]
 
