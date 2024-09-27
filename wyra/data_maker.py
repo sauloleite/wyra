@@ -66,7 +66,7 @@ class FineTuningDataMaker:
 
             # Extract and return the formatted content
             formatted_content = json_repair.loads(response.choices[0].message.content.strip('```jsonl').strip('```').strip())
-            jsonl_content = "\n".join(json.dumps(record, ensure_ascii=False).encode('utf-8').decode('utf-8') for record in formatted_content)
+            jsonl_content = json.dumps(formatted_content, ensure_ascii=False)
             return jsonl_content
         except Exception as e:
             raise RuntimeError(f"An error occurred while formatting text: {e}")
