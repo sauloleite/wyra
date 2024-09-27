@@ -15,7 +15,10 @@ classifiers = [
 
 dependencies = [
     "cryptography",
-    "openai"
+    "openai",
+    "tiktoken",
+    "json",
+    "json-repair"
 ]
 
 [project.urls]
