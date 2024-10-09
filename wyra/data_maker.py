@@ -1,8 +1,8 @@
-from openai import AzureOpenAI
 from wyra.crypto import CryptoHandler
 import json_repair
 import json
 import tiktoken
+import google.generativeai as genai  
 
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
@@ -12,19 +12,17 @@ class FineTuningDataMaker:
     """
 
     def __init__(self):
-        # Set default values for endpoint and API version
+        # Set default values for API key
         crypto = CryptoHandler("wyra")
-        self.azure_endpoint = crypto.decrypt("UNrxG56N4oYa4JU72yEoqs/8oGh/euzSATu+t/WBbzthnjMyQNWgZQZItu8RtLNpSe4rCzjInYDqHbjtjtHA0tyaAepd28KFzX5Ooy63jCc=", "wyra")
-        self.api_version = "2024-02-01"
-        self.api_key = crypto.decrypt("ecOr5rAvJ4vi05qo9h2PzM/8oGh/euzSATu+t/WBbzscKATvs69rxDHX8SjFeJhqxOXp/cJZi8nM2/DcIM4UG8SveFHgD6UbjdXPfWdyGng=", "wyra")  
+        self.api_key = crypto.decrypt("tZOqzT68nu6g7INzcmNMtWZRfIMBMhMTJj3DAn66uUcfLYv/Ftcz2SW+uS6F4zmKSQBN/vBBknBJRh6LnScNabgYqq6YY/vGXsJGud82kyY=", "wyra")
 
-        # Initialize the AzureOpenAI client
-        self.client = AzureOpenAI(
-            azure_endpoint=self.azure_endpoint,
-            api_key=self.api_key,
-            api_version=self.api_version
-        )
+        # Configure the Gemini API with your key
+        genai.configure(api_key=self.api_key)
 
+        # Create the Gemini model (equivalente ao GPT da OpenAI)
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        
+        
     def format_data(self, content):
         """
         Creates and formats data for fine-tuning.
@@ -44,6 +42,7 @@ class FineTuningDataMaker:
             '{"role": "user", "content": "<user question>"}, '
             '{"role": "assistant", "content": "<assistant response>"}]}'
             "Return only the JSONL-formatted data without any additional text."
+            "Please create as many JSONL fields as necessary."
             "If you receive inputs in different languages, please return them in the same language."
             "\n\nHere is the content to be formatted:\n\n" + content
         )
@@ -55,17 +54,14 @@ class FineTuningDataMaker:
 
         try:
             # Send the request to the API
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "You are an expert in formatting texts in JSONL for fine-tuning."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.1
+            response = self.model.generate_content(prompt,
+                generation_config=genai.types.GenerationConfig(
+                    temperature=0.1,
+                ),
             )
-
+            print(response.text)
             # Extract and return the formatted content
-            formatted_content = json_repair.loads(response.choices[0].message.content.strip('```jsonl').strip('```').strip())
+            formatted_content = json_repair.loads(response.text.strip('```jsonl').strip('```').strip())
             jsonl_content = json.dumps(formatted_content, ensure_ascii=False)
             return jsonl_content
         except Exception as e:
