@@ -4,3 +4,4 @@ pytest
 pytest-cov
 tiktoken
 json-repair
+google-generativeai
