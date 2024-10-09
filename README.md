@@ -43,6 +43,34 @@ with open('formatted_data.jsonl', 'w') as file:
     file.write(formatted_data)
 ```
 
+## Multiple Texts
+
+Here's an example of how to use Wyra with multiple texts:
+
+```python
+# Import necessary libraries
+import json
+from wyra import FineTuningDataMaker
+
+# Initialize the Fine-Tuning data maker
+creator = FineTuningDataMaker()
+
+# Sample contents to format
+contents = [
+    "First text content here.",
+    "Second text content here.",
+    "Third text content here."
+]
+
+# Create and format data for multiple contents
+formatted_data = [creator.format_data(content) for content in contents]
+
+# Save JSONL data to a file
+with open('formatted_data.jsonl', 'w') as file:
+    for data in formatted_data:
+        file.write(data + '\n')
+```
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](https://github.com/sauloleite/wyra/blob/main/LICENSE) file for details.
