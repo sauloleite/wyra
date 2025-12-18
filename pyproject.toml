@@ -14,11 +14,11 @@ classifiers = [
 ]
 
 dependencies = [
-    "cryptography",
-    "openai",
-    "tiktoken",
-    "json-repair",
-    "google-generativeai"
+  "cryptography",
+  "openai",
+  "tiktoken",
+  "json-repair",
+  "google-genai"
 ]
 
 [project.urls]

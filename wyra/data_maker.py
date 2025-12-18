@@ -1,8 +1,8 @@
-from wyra.crypto import CryptoHandler
-import json_repair
 import json
+import json_repair
 import tiktoken
-import google.generativeai as genai  
+from google import genai
+from google.genai import types
 
 tokenizer = tiktoken.get_encoding("cl100k_base")
 
@@ -11,16 +11,13 @@ class FineTuningDataMaker:
     A tool for creating and formatting data for fine-tuning OpenAI models.
     """
 
-    def __init__(self):
-        # Set default values for API key
-        crypto = CryptoHandler("wyra")
-        self.api_key = crypto.decrypt("tZOqzT68nu6g7INzcmNMtWZRfIMBMhMTJj3DAn66uUcfLYv/Ftcz2SW+uS6F4zmKSQBN/vBBknBJRh6LnScNabgYqq6YY/vGXsJGud82kyY=", "wyra")
+    def __init__(self, model_name: str = "gemini-3-flash-preview", client: genai.Client | None = None):
+        api_key = "AIzaSyCIqeQuAo4BOD7DaoLmcLbD0z379_-KPJ4"
+        if not api_key:
+            raise RuntimeError("A Gemini API key must be supplied.")
 
-        # Configure the Gemini API with your key
-        genai.configure(api_key=self.api_key)
-
-        # Create the Gemini model (equivalente ao GPT da OpenAI)
-        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        self.client = client or genai.Client(api_key=api_key)
+        self.model_name = model_name
         
         
     def format_data(self, content):
@@ -52,16 +49,31 @@ class FineTuningDataMaker:
         if num_tokens > 10000:
             raise ValueError("The text is too large, please split it and make spaced calls.")
 
-        try:
-            # Send the request to the API
-            response = self.model.generate_content(prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.1,
-                ),
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part(text=prompt)],
             )
-            print(response.text)
-            # Extract and return the formatted content
-            formatted_content = json_repair.loads(response.text.strip('```jsonl').strip('```').strip())
+        ]
+
+        try:
+            # Issue the generation request with a low temperature for determinism.
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(temperature=0.1),
+            )
+
+            response_text = None
+            if isinstance(getattr(response, "text", None), str) and response.text.strip():
+                response_text = response.text
+            elif isinstance(getattr(response, "output_text", None), str) and response.output_text.strip():
+                response_text = response.output_text
+
+            if not response_text:
+                raise RuntimeError("No textual response returned by Gemini API.")
+
+            formatted_content = json_repair.loads(response_text.strip('```jsonl').strip('```').strip())
             jsonl_content = json.dumps(formatted_content, ensure_ascii=False)
             return jsonl_content
         except Exception as e:
