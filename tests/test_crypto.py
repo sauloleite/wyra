@@ -1,5 +1,5 @@
 import pytest
-from cryptography.hazmat.primitives.kdf.scrypt import InvalidKey
+from cryptography.exceptions import InvalidKey
 from wyra.crypto import CryptoHandler  # Import the CryptoHandler class
 
 class TestCrypto:
