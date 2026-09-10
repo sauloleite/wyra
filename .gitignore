@@ -162,3 +162,9 @@ cython_debug/
 .DS_Store
 formatted_content.jsonl
 wyra/crypto.ipynb
+
+# wyra
+out/
+.ruff_cache/
+junit/
+*.manifest.json

@@ -1,0 +1,11 @@
+Pergunta: O que é código limpo?
+Resposta: É um código que qualquer programador consegue ler e entender sem explicação adicional.
+
+Pergunta: Por que evitar repetição?
+Resposta: Porque manter duas cópias do mesmo conhecimento dobra o custo de cada mudança.
+Cada parte do sistema deve ter uma única representação.
+
+Q: What does FIRST stand for?
+A: Fast, Independent, Repeatable, Self-validating, Timely.
+
+Pergunta: Esta pergunta não tem resposta?

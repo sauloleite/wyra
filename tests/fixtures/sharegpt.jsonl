@@ -1,0 +1,2 @@
+{"conversations": [{"from": "system", "value": "Seja breve."}, {"from": "human", "value": "O que é KISS?"}, {"from": "gpt", "value": "Keep it simple."}]}
+{"conversations": [{"from": "human", "value": "Ping"}, {"from": "gpt", "value": "Pong"}, {"from": "human", "value": "Ping again"}, {"from": "gpt", "value": "Pong again"}]}
