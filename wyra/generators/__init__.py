@@ -13,6 +13,7 @@ from typing import Any
 from ..errors import ConfigError
 from ..ports import ExampleGenerator
 from ..prompts import Prompts, by_lang
+from .llm import InstructionGenerator, LLMExampleGenerator, QAPairGenerator
 from .markdown import MarkdownSectionGenerator
 from .qa_pairs import QAPairExtractor
 from .selfsupervised import ClozeGenerator, ContinuationGenerator
@@ -26,7 +27,12 @@ GENERATORS: dict[str, GeneratorFactory] = {
     "template": TemplateGenerator,
     "continuation": ContinuationGenerator,
     "cloze": ClozeGenerator,
+    "llm-qa": QAPairGenerator,
+    "llm-instruction": InstructionGenerator,
 }
+
+# Generators that need a CompletionProvider as their first argument.
+NEEDS_PROVIDER = frozenset({"llm-qa", "llm-instruction"})
 
 # Which generator a file extension implies when none is given.
 BY_EXTENSION: dict[str, str] = {
@@ -40,7 +46,7 @@ BY_EXTENSION: dict[str, str] = {
 }
 
 # Generators that take a ``prompts`` keyword.
-_LOCALIZED = frozenset({"markdown", "continuation", "cloze"})
+_LOCALIZED = frozenset({"markdown", "continuation", "cloze", "llm-qa", "llm-instruction"})
 
 
 def register(name: str, factory: GeneratorFactory) -> None:
@@ -87,13 +93,23 @@ def describe_all(generators: list[ExampleGenerator]) -> Mapping[str, Any]:
 __all__ = [
     "BY_EXTENSION",
     "GENERATORS",
+    "NEEDS_PROVIDER",
     "ClozeGenerator",
     "ContinuationGenerator",
+    "InstructionGenerator",
+    "LLMExampleGenerator",
     "MarkdownSectionGenerator",
     "QAPairExtractor",
+    "QAPairGenerator",
     "TemplateGenerator",
     "available",
     "create",
     "for_source",
+    "needs_provider",
     "register",
 ]
+
+
+def needs_provider(name: str) -> bool:
+    """Whether this generator will call a model, and therefore needs a provider."""
+    return name in NEEDS_PROVIDER
