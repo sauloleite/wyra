@@ -1,0 +1,11 @@
+Pergunta: O que é código limpo?
+Resposta: É um código que qualquer programador consegue ler e entender sem precisar de explicação adicional. Se ele precisa ser explicado, ainda não está limpo.
+
+Pergunta: Por que vale a pena refatorar código que já funciona?
+Resposta: Porque o custo total de manter um código ruim é enorme. Uma mudança que caberia em poucas linhas acaba se espalhando por muitos lugares do sistema, e cada um deles precisa ser entendido antes de ser alterado.
+
+Pergunta: O que é DRY?
+Resposta: Don't repeat yourself. Cada parte do conhecimento do sistema deve ter uma única representação, para que uma mudança aconteça em um lugar só.
+
+Pergunta: O que significa o acrônimo FIRST nos testes?
+Resposta: Fast, Independent, Repeatable, Self-validating e Timely. Testes rápidos, independentes entre si, repetíveis em qualquer ambiente, com resultado binário e escritos antes do código de produção.

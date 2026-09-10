@@ -168,3 +168,4 @@ out/
 .ruff_cache/
 junit/
 *.manifest.json
+examples/out/
