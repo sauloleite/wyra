@@ -17,13 +17,11 @@ import urllib.request
 
 import pytest
 
-from wyra.domain import Document
+from wyra.domain import Document, Message, Role
 from wyra.generators import QAPairGenerator
 from wyra.prompts import PT_BR
 from wyra.providers.ollama import OllamaProvider
 from wyra.validation import validate_records
-
-pytestmark = pytest.mark.live
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 MODEL = os.environ.get("WYRA_LIVE_MODEL", "llama3.2:1b")
@@ -73,7 +71,7 @@ def test_the_format_field_constrains_decoding() -> None:
         "required": ["answer"],
     }
     completion = provider.complete(
-        [__import__("wyra").Message("user", "Responda em JSON: o que é refatorar?")],
+        [Message(Role.USER, "Responda em JSON: o que é refatorar?")],
         json_schema=schema,
     )
     payload = json.loads(completion.text)

@@ -169,3 +169,6 @@ out/
 junit/
 *.manifest.json
 examples/out/
+
+# libraries pin nothing; the lock belongs to applications
+uv.lock
