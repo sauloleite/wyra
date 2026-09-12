@@ -20,7 +20,7 @@ _WHITESPACE = re.compile(r"\s+")
 
 
 class Role(str, Enum):
-    """Conversation roles supported in 0.1.0. Tool/function roles are rejected on input."""
+    """Conversation roles this library supports. Tool and function roles are rejected."""
 
     SYSTEM = "system"
     USER = "user"

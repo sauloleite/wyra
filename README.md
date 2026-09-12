@@ -6,7 +6,8 @@ Most of what a dataset needs is not generation, it is **conversion and curation*
 both are plain code. wyra treats a language model as one optional component among several:
 useful when the source is free prose, unnecessary when the source already has structure.
 
-"Wyra" means *bird* in Tupi. Like a bird, this library helps you fly through the boring
+"Wyra" means *bird* in Guajajara, an indigenous language of Brazil, as recorded in the
+*Dicionário Guajajara-Português*. Like a bird, this library helps you fly through the boring
 part of fine-tuning.
 
 ```bash
@@ -92,7 +93,7 @@ that is complete.
 
 ```bash
 wyra setup --download phi-3.5-mini
-wyra build notas.txt -o dataset --generator llm-qa --provider local
+wyra build notes.txt -o dataset --generator llm-qa --provider local
 ```
 
 A download always asks first, showing the size, the licence and where the files will land.
@@ -192,20 +193,24 @@ build_dataset(
 )
 ```
 
-With no templates at all, common column names are detected (`question`/`answer`,
-`pergunta`/`resposta`, `instruction`/`input`/`output`).
+With no templates at all, common column names are detected: `question`/`answer`,
+`instruction`/`input`/`output`, and the Portuguese `pergunta`/`resposta`, because a table
+exported from a Brazilian system rarely has English headers.
 
 ### Free prose with a local model
 
 ```python
 from wyra import build_dataset
 from wyra.generators import QAPairGenerator
-from wyra.prompts import PT_BR
 from wyra.providers import create
 
-generator = QAPairGenerator(create("ollama", model="llama3.2:3b"), prompts=PT_BR, per_chunk=3)
-build_dataset("notas/*.txt", out_dir="dataset", generator=generator, validation_fraction=0.1)
+generator = QAPairGenerator(create("ollama", model="llama3.2:3b"), per_chunk=3)
+build_dataset("notes/*.txt", out_dir="dataset", generator=generator, validation_fraction=0.1)
 ```
+
+The instructions the generators send are presets, available in English and Brazilian
+Portuguese. Select one with `lang="pt-br"` or `--lang pt-br`, or pass your own `Prompts`
+record. The model answers in the language of the source text either way.
 
 The same call with Gemini, choosing the provider from the environment:
 
@@ -214,7 +219,7 @@ export WYRA_PROVIDER=gemini GEMINI_API_KEY=...
 ```
 
 ```python
-build_dataset("notas/*.txt", out_dir="dataset", generator="llm-qa")
+build_dataset("notes/*.txt", out_dir="dataset", generator="llm-qa")
 ```
 
 ### Validate and convert what you already have
@@ -268,11 +273,12 @@ build_examples(examples, "dataset/train.jsonl", validation_fraction=0.1)
 ## Command line
 
 ```bash
-wyra build docs/*.md -o dataset --lang pt-br --valid 0.1 --system "Seja um tutor."
+wyra build docs/*.md -o dataset --valid 0.1 --system "You are a tutor."
+wyra build docs/*.md -o dataset --lang pt-br --valid 0.1
 wyra build faq.txt   -o dataset --generator qa
-wyra build rows.csv  -o dataset --generator template --user "{pergunta}" --assistant "{resposta}"
-wyra build notas.txt -o dataset --generator llm-qa --provider ollama --model llama3.2:3b
-wyra build notas.txt -o dataset --generator llm-qa --provider local
+wyra build rows.csv  -o dataset --generator template --user "{question}" --assistant "{answer}"
+wyra build notes.txt -o dataset --generator llm-qa --provider ollama --model llama3.2:3b
+wyra build notes.txt -o dataset --generator llm-qa --provider local
 wyra validate dataset/train.jsonl
 wyra convert dataset/train.jsonl -o alpaca.jsonl --to alpaca
 wyra convert theirs.jsonl.gz -o ours.jsonl --skip-invalid
@@ -305,8 +311,8 @@ for the output and `--from` for the input; in Python it is `output_format=`.
 
 Validation reports every problem instead of stopping at the first, each with its line
 number: invalid JSON, a record that is not an object, a missing or malformed `messages`
-list, unknown message keys, unrecognized roles, empty content, tool calls (not supported in
-0.1.0), no assistant message, a conversation that does not end with the assistant, and a
+list, unknown message keys, unrecognized roles, empty content, tool calls (not supported
+yet), no assistant message, a conversation that does not end with the assistant, and a
 record whose format cannot be determined.
 
 ## Counting tokens
@@ -335,7 +341,7 @@ as a by-product rather than as paperwork:
 
 ```json
 {
-  "wyra_version": "0.1.0",
+  "wyra_version": "0.1.1",
   "created_at": "2026-09-12T16:31:34Z",
   "generator": {"name": "llm-qa", "params": {"model": "llama3.2:3b", "prompt_sha256": "d36f…"}},
   "chunker": {"name": "paragraphs"},

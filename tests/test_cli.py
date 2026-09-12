@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import wyra
 from wyra.cli import main
 
 
@@ -115,7 +116,7 @@ def test_version_and_missing_subcommand(capsys) -> None:
     with pytest.raises(SystemExit) as info:
         main(["--version"])
     assert info.value.code == 0
-    assert "wyra 0.1.0" in capsys.readouterr().out
+    assert f"wyra {wyra.__version__}" in capsys.readouterr().out
     with pytest.raises(SystemExit) as info:
         main([])
     assert info.value.code == 2
