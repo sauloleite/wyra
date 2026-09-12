@@ -1,0 +1,11 @@
+[1, 2, 3]
+{"messages": "not a list"}
+{"messages": [{"role": "user", "content": "hi", "extra": 1}, {"role": "assistant", "content": "hello"}]}
+{"messages": [{"role": "robot", "content": "hi"}, {"role": "assistant", "content": "hello"}]}
+{"messages": [{"role": "user", "content": ""}, {"role": "assistant", "content": "hello"}]}
+{"messages": [{"role": "user", "content": "hi"}, {"role": "user", "content": "anyone?"}]}
+{"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}, {"role": "user", "content": "bye"}]}
+{"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "ok", "tool_calls": []}]}
+{not json at all}
+{"text": "no messages here"}
+{"messages": [{"role": "user", "content": "valid"}, {"role": "assistant", "content": "yes"}]}

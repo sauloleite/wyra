@@ -1,12 +1,12 @@
-from wyra.data_maker import FineTuningDataMaker
-import json
+# Clean Code, um resumo
 
-fine_tunner = FineTuningDataMaker()
+Resenha do livro *Clean Code*, de Robert C. Martin, com as ideias que mais mudam o dia
+a dia de quem escreve software. Este arquivo existe para demonstrar a geração de
+datasets a partir de Markdown, sem nenhum modelo envolvido.
 
-content = """
+## Por que código que funciona não basta
+
 Como programadores, a nossa primeira prioridade é criar código que funciona. Infelizmente, código que simplesmente “funciona” não é suficiente. Código que tem valor real e é duradouro, tem que ser “limpo”. Em Clean Code: A Handbook of Agile Software Craftsmanship traduzido para o português como Código Limpo: Habilidades Práticas do Agile Software, de Robert C. Martin ou “Uncle Bob” como ele se auto intitula, usa vários exemplos e casos de estudo para nos ajudar a identificar código que pode ser melhorado, e nos dá uma variedades de técnicas para fazermos essa limpeza no código.
-
-
 
 O livro começa com uma citação do escritor, sendo muito direta quanto a razão ao qual os leitores estão buscando ao ler seu livro.
 
@@ -44,7 +44,8 @@ O livro está divido em três partes. Na primeira há diversos capítulos que de
 
 A segunda parte consiste em diversos casos de estudo de complexidade cada vez maior. Cada um é um exercício para limpar um código — transformar o código base que possui alguns problemas em um melhor e eficiente. A terceira parte é a compensação: um único capítulo com uma lista de heurísticas e “odores” reunidos durante a criação dos estudos de caso. O resultado será um conhecimento base que descreve a forma como pensamos quando criamos, lemos e limpamos um código.
 
-Nomes são muito importantes
+## Nomes são muito importantes
+
 É comum as pessoas serem apelidadas pelas suas características mais comuns. Para termos um código limpo, devemos fazer isso com ele. Nomear variáveis, funções, parâmetros, classes ou métodos de acordo com suas funcionalidades. Isso é essencial para um bom entendimento do código.
 
 Ao definir um nome, precisamos ter em mente dois pontos principais:
@@ -55,7 +56,8 @@ Para finalizar, é recomendável que:
 
 Métodos ou Funções: devem ter nome de verbos, para assim, expressar quais são suas finalidades;
 Classes e Objetos: deve ser utilizado substantivos.
-Seja um verdadeiro autor do seu código
+
+## Seja um verdadeiro autor do seu código
 
 O código é uma história. Então, como um bom autor, devemos nos preocupar com a maneira de como contar essa história. A ideia desse tópico é simples! Para estruturar um código limpo, é necessário criar funções simples, pequenas e claras. Segundo Robert, a primeira regra das funções é a seguinte:
 
@@ -69,12 +71,14 @@ As funções devem ter apenas uma tarefa e, assim, saber cumpri-la da maneira ma
 
 Para ajudar a vida dos programadores, o paradigma de programação orientado a objetos auxilia na criação de métodos que podem ser utilizados em todas as funcionalidades do software.
 
-Comente. Mas só o necessário!
+## Comente. Mas só o necessário
+
 Comente o necessário e somente o necessário. Códigos são constantemente modificados, enquanto comentários, raramente. Assim, é comum um comentário deixar de ter significado, ou pior ainda, passar um significado falso depois de algum tempo.
 
 Além disso, códigos com muitos comentários são tão ruins que, com o tempo, nossos olhos acabam ignorando todos. Então, o melhor não é comentar os códigos ruins e sim reescrevê-los.
 
-Utilize DRY
+## Utilize DRY
+
 DRY é o anacrônico para Don’t repeat yourself (Não repita a si mesmo). É o conceito que diz que cada parte de conhecimento do sistema deve possuir apenas uma representação. Desta forma, evitando a ambiguidade do código. Em outras palavras, não deve existir duas partes do programa que desempenham a mesma função, ou seja, o famoso copiar e colar no código.
 
 Mas porque evitar repetição? Simples!
@@ -93,7 +97,7 @@ Exceptions: mecanismo que sinaliza eventos excepcionais. Por exemplo, tentar ins
 Blocos try-catch: capturam as exceções citadas. Portanto, devem ser utilizados de maneira global. Afinal de contas, os métodos já possuem suas funções (que não é tratar erros).
 Para finalizarmos esse tópico, uma dica excelente para não gerar erros em seu código é simplesmente não utilizar “null”, tanto como parâmetro, quanto para retorno em funções. Muitas vezes, esses retornos exigem verificações desnecessárias que, caso não sejam feitas, podem gerar erros.
 
-Regra de Escoteiro
+## Regra de Escoteiro
 
 Os escoteiros possuem uma regra: deixe o acampamento mais limpo do que você o encontrou. Para desenvolvedores, podemos adaptar para:
 
@@ -105,7 +109,8 @@ Você não precisa refatorar a classe inteira, são ações pequenas como mudar 
 
 Refatorar o código deve ser um hábito. É uma atividade essencial para a modernização do software e deve ser feita com muito cuidado para não impactar as funcionalidades existentes. Pensamentos como “isso é perda de tempo” ou “se tá funcionando melhor não mexer” são prejudiciais a longo prazo. O melhor é refatorar o mais rápido possível enquanto a lógica ainda está fresca na cabeça.
 
-Testes limpos
+## Testes limpos
+
 Um código só está realmente limpo se ele for validado. Mas a questão é, como é possível manter um teste limpo? A resposta é simples, da mesma maneira que mantemos o nosso código limpo, com clareza, simplicidade e consistência de expressão.
 
 Testes limpos seguem as regras do anacrônico FIRST (Fast, Indepedent, Repeatable, Self-validation, Timely).
@@ -115,12 +120,15 @@ Independência: quando testes são dependentes, uma falha pode causar um efeito 
 Repetitividade: deve ser possível repetir o teste em qualquer ambiente;
 Auto validação: bons testes possuem como resultado respostas do tipo “verdadeiro” ou “falso”. Caso contrário, a falha pode se tornar subjetiva;
 Pontualidade: os testes precisam ser escritos antes do código de produção, onde os testes serão aplicados. Caso contrário, o código pode ficar complexo demais para ser testado ou até pode ser que o código não possa ser testado.
-Tenha orgulho do seu código!
+
+## Tenha orgulho do seu código
+
 Acima falamos sobre vários conceitos de Clean Code, mas Michael Feathers (autor do livro Legacy Code) conseguiu resumir Código Limpo em uma frase que resume tudo!
 
 “Um código limpo sempre parece que foi escrito por alguém que se importava”
 
-Conclusão:
+## Conclusão
+
 Se importar com um código é tomar cuidado na hora de:
 
 Dar nomes;
@@ -131,10 +139,4 @@ Não deixar de refatorar;
 Utilizar testes limpos para validações.
 No fim, a sensação de orgulho é recompensadora! O que compensa todo o trabalho duro durante o desenvolvimento!
 
-Na minha opinião o livro é de leitura fundamental para todos os desenvolvedores, uma vez que ele nos faz refletir sobre nossas decisões na hora de programar e os aprendizados adquiridos nele são levados adiante, como se fossemos evangelizados a seguir boas práticas de desenvolvimento."""
-
-formatted_content = fine_tunner.format_data(content)
-
-print(formatted_content)
-with open('formatted_content.jsonl', 'w', encoding='utf-8') as file:
-    file.write(formatted_content)
+Na minha opinião o livro é de leitura fundamental para todos os desenvolvedores, uma vez que ele nos faz refletir sobre nossas decisões na hora de programar e os aprendizados adquiridos nele são levados adiante, como se fossemos evangelizados a seguir boas práticas de desenvolvimento.

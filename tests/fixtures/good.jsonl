@@ -1,0 +1,3 @@
+{"messages": [{"role": "system", "content": "Você é um tutor de Clean Code."}, {"role": "user", "content": "O que é DRY?"}, {"role": "assistant", "content": "Don't repeat yourself: cada conhecimento tem uma única representação."}]}
+{"messages": [{"role": "user", "content": "Quais são os princípios FIRST?"}, {"role": "assistant", "content": "Fast, Independent, Repeatable, Self-validating, Timely.", "weight": 1}]}
+{"messages": [{"role": "user", "content": "Cite a regra do escoteiro."}, {"role": "assistant", "content": "Deixe o código mais limpo do que estava.", "name": "tutor"}]}
