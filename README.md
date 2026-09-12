@@ -72,6 +72,11 @@ Model weights are not part of any package, and cannot be: PyPI caps a single fil
 100 MiB while usable weights run from hundreds of megabytes upward. They are downloaded
 once, only when you ask, into a user cache, the way spaCy, NLTK and Hugging Face do it.
 
+A multi-gigabyte fetch is retried with backoff when Hugging Face rate-limits it, honouring
+`Retry-After`, and a file that drops part way is restarted rather than appended to. A
+download that fails for good leaves nothing behind, so the cache only ever holds a model
+that is complete.
+
 ```bash
 wyra setup --download phi-3.5-mini
 wyra build notas.txt -o dataset --generator llm-qa --provider local

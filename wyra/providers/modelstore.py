@@ -15,6 +15,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Sequence
@@ -32,8 +33,16 @@ LINEAGE_FILE = "wyra_model.json"
 UNDECLARED = "undeclared"
 SKIP_FILES = (".gitattributes",)
 
+# Hugging Face rate-limits large downloads, so a multi-gigabyte fetch has to wait and
+# retry rather than abandon the whole model.
+RETRYABLE_STATUS = frozenset({408, 425, 429, 500, 502, 503, 504})
+MAX_ATTEMPTS = 5
+BACKOFF_SECONDS = 2.0
+MAX_BACKOFF_SECONDS = 60.0
+
 Opener = Callable[[urllib.request.Request, float], Any]
 Progress = Callable[[str, int, int], None]
+Sleeper = Callable[[float], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,9 +173,20 @@ def resolve(
     return fetch(entry, cache_dir=cache_dir, opener=opener, progress=progress)
 
 
-def list_files(entry: CatalogEntry, *, opener: Opener | None = None) -> list[tuple[str, int]]:
+def list_files(
+    entry: CatalogEntry,
+    *,
+    opener: Opener | None = None,
+    attempts: int = MAX_ATTEMPTS,
+    sleeper: Sleeper = time.sleep,
+) -> list[tuple[str, int]]:
     """The files that make up one variant, as ``(path in repo, size)`` pairs."""
-    body = _get_json(f"{HF_API}/{entry.repo}?blobs=true&revision={entry.revision}", opener)
+    body = _get_json(
+        f"{HF_API}/{entry.repo}?blobs=true&revision={entry.revision}",
+        opener,
+        attempts=attempts,
+        sleeper=sleeper,
+    )
     siblings = body.get("siblings") if isinstance(body, dict) else None
     if not isinstance(siblings, list):
         raise ProviderError(f"unexpected Hugging Face response for {entry.repo}")
@@ -193,11 +213,13 @@ def fetch(
     opener: Opener | None = None,
     progress: Progress | None = None,
     timeout: float = 600.0,
+    attempts: int = MAX_ATTEMPTS,
+    sleeper: Sleeper = time.sleep,
 ) -> Path:
     """Download one variant into the cache. Atomic: a partial download never looks done."""
     target = model_dir(entry, cache_dir)
     staging = target.with_name(f"{target.name}.partial")
-    files = list_files(entry, opener=opener)
+    files = list_files(entry, opener=opener, attempts=attempts, sleeper=sleeper)
 
     if staging.exists():
         shutil.rmtree(staging)
@@ -214,6 +236,8 @@ def fetch(
                 destination,
                 opener,
                 timeout,
+                attempts=attempts,
+                sleeper=sleeper,
             )
         _write_lineage(staging, entry, files)
         if target.exists():
@@ -259,37 +283,102 @@ def _default_opener(request: urllib.request.Request, timeout: float) -> Any:
     return urllib.request.urlopen(request, timeout=timeout)  # noqa: S310 - fixed host
 
 
-def _get_json(url: str, opener: Opener | None, timeout: float = 30.0) -> Any:
+def _get_json(
+    url: str,
+    opener: Opener | None,
+    timeout: float = 30.0,
+    *,
+    attempts: int = MAX_ATTEMPTS,
+    sleeper: Sleeper = time.sleep,
+) -> Any:
     request = urllib.request.Request(url, headers={"Accept": "application/json"})
-    raw = _read(request, opener, timeout)
+    raw = _read(request, opener, timeout, attempts=attempts, sleeper=sleeper)
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ProviderError(f"Hugging Face sent invalid JSON: {raw[:200]!r}") from exc
 
 
-def _read(request: urllib.request.Request, opener: Opener | None, timeout: float) -> bytes:
+def _read(
+    request: urllib.request.Request,
+    opener: Opener | None,
+    timeout: float,
+    *,
+    attempts: int = MAX_ATTEMPTS,
+    sleeper: Sleeper = time.sleep,
+) -> bytes:
     open_url = opener or _default_opener
-    try:
-        with open_url(request, timeout) as response:
-            data: bytes = response.read()
-            return data
-    except urllib.error.HTTPError as exc:
-        raise ProviderError(f"{request.full_url} returned HTTP {exc.code}") from exc
-    except (urllib.error.URLError, OSError) as exc:
-        raise ProviderError(f"cannot reach {request.full_url}: {exc}") from exc
+    for attempt in range(1, max(attempts, 1) + 1):
+        try:
+            with open_url(request, timeout) as response:
+                data: bytes = response.read()
+                return data
+        except urllib.error.HTTPError as exc:
+            _handle_http(exc, request.full_url, attempt, attempts, sleeper)
+        except (urllib.error.URLError, OSError) as exc:
+            _handle_transport(exc, request.full_url, attempt, attempts, sleeper)
+    raise ProviderError(f"gave up reading {request.full_url}")  # pragma: no cover
 
 
-def _download(url: str, destination: Path, opener: Opener | None, timeout: float) -> None:
+def _download(
+    url: str,
+    destination: Path,
+    opener: Opener | None,
+    timeout: float,
+    *,
+    attempts: int = MAX_ATTEMPTS,
+    sleeper: Sleeper = time.sleep,
+) -> None:
+    """Fetch one file, restarting it from scratch on a retry so bytes never duplicate."""
     open_url = opener or _default_opener
     request = urllib.request.Request(url)
-    try:
-        with open_url(request, timeout) as response, destination.open("wb") as handle:
-            shutil.copyfileobj(response, handle, 1 << 20)
-    except urllib.error.HTTPError as exc:
+    for attempt in range(1, max(attempts, 1) + 1):
+        try:
+            with open_url(request, timeout) as response, destination.open("wb") as handle:
+                shutil.copyfileobj(response, handle, 1 << 20)
+            return
+        except urllib.error.HTTPError as exc:
+            destination.unlink(missing_ok=True)
+            _handle_http(exc, url, attempt, attempts, sleeper)
+        except (urllib.error.URLError, OSError) as exc:
+            destination.unlink(missing_ok=True)
+            _handle_transport(exc, url, attempt, attempts, sleeper)
+    raise ProviderError(f"gave up downloading {url}")  # pragma: no cover
+
+
+def _handle_http(
+    exc: urllib.error.HTTPError, url: str, attempt: int, attempts: int, sleeper: Sleeper
+) -> None:
+    """Sleep and let the caller retry, or raise when the status or the budget says stop."""
+    if exc.code not in RETRYABLE_STATUS or attempt >= attempts:
         raise ProviderError(f"{url} returned HTTP {exc.code}") from exc
-    except (urllib.error.URLError, OSError) as exc:
-        raise ProviderError(f"cannot download {url}: {exc}") from exc
+    sleeper(_retry_after(exc) or _backoff(attempt))
+
+
+def _handle_transport(
+    exc: Exception, url: str, attempt: int, attempts: int, sleeper: Sleeper
+) -> None:
+    if attempt >= attempts:
+        raise ProviderError(f"cannot reach {url}: {exc}") from exc
+    sleeper(_backoff(attempt))
+
+
+def _backoff(attempt: int) -> float:
+    delay: float = BACKOFF_SECONDS * float(2 ** (attempt - 1))
+    return delay if delay < MAX_BACKOFF_SECONDS else MAX_BACKOFF_SECONDS
+
+
+def _retry_after(exc: urllib.error.HTTPError) -> float | None:
+    """Honour a numeric Retry-After, which is what Hugging Face sends with 429."""
+    headers: Any = getattr(exc, "headers", None)
+    raw: Any = headers.get("Retry-After") if headers is not None else None
+    if not raw:
+        return None
+    try:
+        seconds: float = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return seconds if seconds < MAX_BACKOFF_SECONDS else MAX_BACKOFF_SECONDS
 
 
 def catalog_rows(cache_dir: str | Path | None = None) -> list[dict[str, Any]]:

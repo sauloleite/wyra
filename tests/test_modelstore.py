@@ -129,7 +129,7 @@ def test_list_files_rejects_a_repository_the_engine_cannot_load() -> None:
 
 def test_list_files_reports_transport_and_shape_problems() -> None:
     with pytest.raises(ProviderError, match="HTTP 503"):
-        ms.list_files(ENTRY, opener=make_opener(fail="/api/models/"))
+        ms.list_files(ENTRY, opener=make_opener(fail="/api/models/"), attempts=1)
     with pytest.raises(ProviderError, match="invalid JSON"):
         ms.list_files(ENTRY, opener=make_opener(payload=b"<html>"))
     with pytest.raises(ProviderError, match="unexpected"):
@@ -168,7 +168,7 @@ def test_fetch_writes_the_variant_flat_with_lineage(tmp_path: Path) -> None:
 
 def test_fetch_leaves_nothing_behind_when_it_fails(tmp_path: Path) -> None:
     with pytest.raises(ProviderError, match="HTTP 503"):
-        ms.fetch(ENTRY, cache_dir=tmp_path, opener=make_opener(fail="model.onnx"))
+        ms.fetch(ENTRY, cache_dir=tmp_path, opener=make_opener(fail="model.onnx"), attempts=1)
     assert not (tmp_path / "test-model").exists()
     assert not (tmp_path / "test-model.partial").exists()
 
@@ -204,3 +204,194 @@ def test_catalog_rows_carry_what_setup_prints(tmp_path: Path) -> None:
     assert default["name"] == ms.DEFAULT_MODEL
     assert all(row["cached"] is False for row in rows)
     assert all(row["size_mb"] > 0 and row["parameters"] for row in rows)
+
+
+class FlakyOpener:
+    """Fails a set number of times, on the listing or on the file, recording every call.
+
+    The two are separate on purpose: a test about a rate-limited download must not have its
+    failures swallowed by the listing that precedes it.
+    """
+
+    def __init__(
+        self,
+        *,
+        failures: int,
+        scope: str = "blob",
+        error: Exception | None = None,
+        payload: Any = None,
+        blob: bytes = b"WEIGHTS",
+        mid_stream: bool = False,
+    ) -> None:
+        self.failures = failures
+        self.scope = scope
+        self.error = error
+        self.payload = api_payload() if payload is None else payload
+        self.blob = blob
+        self.mid_stream = mid_stream
+        self.attempts = 0
+        self.listing_attempts = 0
+        self.blob_attempts = 0
+
+    def __call__(self, request: urllib.request.Request, timeout: float) -> Any:
+        self.attempts += 1
+        listing = "/api/models/" in request.full_url
+        if listing:
+            self.listing_attempts += 1
+            if self.scope == "listing" and self.listing_attempts <= self.failures:
+                return self._fail(request)
+            return io.BytesIO(json.dumps(self.payload).encode())
+        self.blob_attempts += 1
+        if self.scope == "blob" and self.blob_attempts <= self.failures:
+            return self._fail(request)
+        return io.BytesIO(self.blob)
+
+    def _fail(self, request: urllib.request.Request) -> Any:
+        if self.mid_stream:
+            return HalfBrokenResponse(self.blob[:3])
+        raise self.error or urllib.error.HTTPError(
+            request.full_url, 429, "Too Many Requests", {}, None
+        )  # type: ignore[arg-type]
+
+
+class HalfBrokenResponse(io.BytesIO):
+    """Hands over a few bytes, then drops the connection, like a real interrupted download."""
+
+    def read(self, size: int = -1) -> bytes:
+        chunk = super().read(size)
+        if chunk:
+            return chunk
+        raise urllib.error.URLError("connection reset")
+
+
+class RecordingSleeper:
+    def __init__(self) -> None:
+        self.delays: list[float] = []
+
+    def __call__(self, seconds: float) -> None:
+        self.delays.append(seconds)
+
+
+def one_file_entry() -> ms.CatalogEntry:
+    return ms.CatalogEntry(
+        name="retry-model",
+        repo="acme/retry-onnx",
+        revision="f" * 40,
+        prefix="",
+        size_mb=1,
+        license="mit",
+        parameters="0.1B",
+        note="retry fixture",
+    )
+
+
+def single_file_payload() -> dict[str, Any]:
+    return api_payload({ms.CONFIG_FILE: b"WEIGHTS"})
+
+
+def test_a_rate_limited_download_is_retried_with_growing_delays(tmp_path: Path) -> None:
+    opener = FlakyOpener(failures=2, payload=single_file_payload())
+    sleeper = RecordingSleeper()
+    target = ms.fetch(
+        one_file_entry(), cache_dir=tmp_path, opener=opener, sleeper=sleeper, attempts=5
+    )
+
+    assert (target / ms.CONFIG_FILE).read_bytes() == b"WEIGHTS"
+    assert sleeper.delays == [2.0, 4.0]
+    assert opener.blob_attempts == 3
+    assert opener.listing_attempts == 1
+
+
+def test_a_numeric_retry_after_is_honoured(tmp_path: Path) -> None:
+    def opener(request: urllib.request.Request, timeout: float) -> Any:
+        opener.calls = getattr(opener, "calls", 0) + 1  # type: ignore[attr-defined]
+        if opener.calls == 1:  # type: ignore[attr-defined]
+            raise urllib.error.HTTPError(
+                request.full_url, 429, "slow down", {"Retry-After": "7"}, None
+            )  # type: ignore[arg-type]
+        return io.BytesIO(json.dumps(single_file_payload()).encode())
+
+    sleeper = RecordingSleeper()
+    assert ms.list_files(one_file_entry(), opener=opener, sleeper=sleeper)
+    assert sleeper.delays == [7.0]
+
+
+def test_an_absurd_retry_after_is_capped(tmp_path: Path) -> None:
+    def opener(request: urllib.request.Request, timeout: float) -> Any:
+        raise urllib.error.HTTPError(
+            request.full_url, 429, "slow down", {"Retry-After": "99999"}, None
+        )  # type: ignore[arg-type]
+
+    sleeper = RecordingSleeper()
+    with pytest.raises(ProviderError, match="HTTP 429"):
+        ms.list_files(one_file_entry(), opener=opener, sleeper=sleeper, attempts=2)
+    assert sleeper.delays == [ms.MAX_BACKOFF_SECONDS]
+
+
+def test_a_nonsense_retry_after_falls_back_to_backoff() -> None:
+    def opener(request: urllib.request.Request, timeout: float) -> Any:
+        raise urllib.error.HTTPError(
+            request.full_url, 503, "later", {"Retry-After": "tomorrow"}, None
+        )  # type: ignore[arg-type]
+
+    sleeper = RecordingSleeper()
+    with pytest.raises(ProviderError, match="HTTP 503"):
+        ms.list_files(one_file_entry(), opener=opener, sleeper=sleeper, attempts=2)
+    assert sleeper.delays == [2.0]
+
+
+def test_a_persistent_rate_limit_eventually_gives_up(tmp_path: Path) -> None:
+    opener = FlakyOpener(failures=99, payload=single_file_payload())
+    sleeper = RecordingSleeper()
+    with pytest.raises(ProviderError, match="HTTP 429"):
+        ms.fetch(one_file_entry(), cache_dir=tmp_path, opener=opener, sleeper=sleeper, attempts=3)
+    assert opener.blob_attempts == 3
+    assert len(sleeper.delays) == 2
+    assert not (tmp_path / "retry-model").exists()
+
+
+def test_a_client_error_is_not_retried() -> None:
+    error = urllib.error.HTTPError("u", 404, "gone", {}, None)  # type: ignore[arg-type]
+    opener = FlakyOpener(failures=99, scope="listing", error=error)
+    sleeper = RecordingSleeper()
+    with pytest.raises(ProviderError, match="HTTP 404"):
+        ms.list_files(one_file_entry(), opener=opener, sleeper=sleeper)
+    assert opener.listing_attempts == 1
+    assert sleeper.delays == []
+
+
+def test_a_transport_failure_is_retried() -> None:
+    opener = FlakyOpener(
+        failures=1,
+        scope="listing",
+        error=urllib.error.URLError("reset"),
+        payload=single_file_payload(),
+    )
+    sleeper = RecordingSleeper()
+    assert ms.list_files(one_file_entry(), opener=opener, sleeper=sleeper)
+    assert sleeper.delays == [2.0]
+    assert opener.listing_attempts == 2
+
+    always = FlakyOpener(failures=99, scope="listing", error=urllib.error.URLError("reset"))
+    with pytest.raises(ProviderError, match="cannot reach"):
+        ms.list_files(one_file_entry(), opener=always, sleeper=RecordingSleeper(), attempts=2)
+
+
+def test_an_interrupted_download_restarts_instead_of_appending(tmp_path: Path) -> None:
+    opener = FlakyOpener(
+        failures=1, payload=single_file_payload(), blob=b"WEIGHTS", mid_stream=True
+    )
+    sleeper = RecordingSleeper()
+    target = ms.fetch(
+        one_file_entry(), cache_dir=tmp_path, opener=opener, sleeper=sleeper, attempts=3
+    )
+    # the first attempt delivered "WEI" before dropping; the file must hold the whole body once
+    assert (target / ms.CONFIG_FILE).read_bytes() == b"WEIGHTS"
+    assert sleeper.delays == [2.0]
+
+
+def test_backoff_grows_then_stops_growing() -> None:
+    delays = [ms._backoff(attempt) for attempt in range(1, 9)]
+    assert delays[:3] == [2.0, 4.0, 8.0]
+    assert delays[-1] == ms.MAX_BACKOFF_SECONDS
+    assert all(later >= earlier for earlier, later in zip(delays, delays[1:], strict=False))
