@@ -85,6 +85,15 @@ wyra setup --download phi-3.5-mini
 wyra build notas.txt -o dataset --generator llm-qa --provider local
 ```
 
+A download always asks first, showing the size, the licence and where the files will land.
+`--yes` skips that prompt, and without a terminal and without `--yes` the command refuses
+rather than quietly spending gigabytes inside a CI job. `--cache-dir` puts the weights
+somewhere other than the default cache, the same thing `WYRA_CACHE_DIR` does:
+
+```bash
+wyra setup --download qwen2.5-0.5b --yes --cache-dir ./models
+```
+
 | Model | Parameters | Download | Licence |
 |---|---|---|---|
 | `phi-3.5-mini` (default) | 3.8B | 2782 MB | MIT |
@@ -235,6 +244,7 @@ wyra convert dataset/train.jsonl -o alpaca.jsonl --to alpaca
 wyra convert theirs.jsonl.gz -o ours.jsonl --skip-invalid
 wyra setup
 wyra setup --download phi-3.5-mini
+wyra setup --download qwen2.5-0.5b --yes --cache-dir ./models
 ```
 
 `wyra validate` exits non-zero when any record is invalid, so it drops straight into CI.
