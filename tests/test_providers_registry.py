@@ -33,7 +33,7 @@ def test_unknown_provider_lists_the_known_ones() -> None:
         create("mistral")
     assert "unknown provider 'mistral'" in str(info.value)
     assert "ollama" in str(info.value)
-    assert available() == ["fake", "gemini", "ollama", "openai"]
+    assert available() == ["fake", "gemini", "local", "ollama", "openai"]
 
 
 def test_a_missing_api_key_fails_before_any_network_call() -> None:

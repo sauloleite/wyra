@@ -29,7 +29,8 @@ dependencies = []
 tokens = ["tiktoken>=0.7"]
 openai = ["openai>=1.40"]
 gemini = ["google-genai>=1.0"]
-all = ["wyra[tokens,openai,gemini]"]
+local = ["onnxruntime-genai>=0.11"]
+all = ["wyra[tokens,openai,gemini,local]"]
 dev = [
   "pytest>=8",
   "pytest-cov>=5",
@@ -69,7 +70,7 @@ strict = true
 files = ["wyra"]
 
 [[tool.mypy.overrides]]
-module = ["google.*", "tiktoken.*", "openai.*"]
+module = ["google.*", "tiktoken.*", "openai.*", "onnxruntime_genai.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

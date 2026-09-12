@@ -45,10 +45,57 @@ pip install wyra                 # core: no dependencies at all
 pip install "wyra[tokens]"       # exact token counts with tiktoken
 pip install "wyra[openai]"       # OpenAI, Azure, vLLM, LM Studio, Groq
 pip install "wyra[gemini]"       # Google Gemini
+pip install "wyra[local]"        # embedded model: no daemon, no key
 pip install "wyra[all]"          # everything above
 ```
 
 The Ollama adapter needs no extra: it speaks HTTP through the standard library.
+
+Not sure what you have? Ask:
+
+```bash
+wyra setup
+```
+
+It reports which extras are installed, whether Ollama is reachable and what it has pulled,
+whether a credential is present in the environment (never its value), and which embedded
+models are cached.
+
+### An embedded model, with no daemon and no key
+
+`wyra[local]` installs onnxruntime-genai, a real inference engine with prebuilt wheels for
+macOS, Linux and Windows, so no compiler is involved. Generation then happens inside your
+own process, and the JSON schema is enforced by the engine's constrained decoding rather
+than requested politely in a prompt.
+
+Model weights are not part of any package, and cannot be: PyPI caps a single file at
+100 MiB while usable weights run from hundreds of megabytes upward. They are downloaded
+once, only when you ask, into a user cache, the way spaCy, NLTK and Hugging Face do it.
+
+```bash
+wyra setup --download phi-3.5-mini
+wyra build notas.txt -o dataset --generator llm-qa --provider local
+```
+
+| Model | Parameters | Download | Licence |
+|---|---|---|---|
+| `phi-3.5-mini` (default) | 3.8B | 2782 MB | MIT |
+| `phi-3-mini` | 3.8B | 2726 MB | MIT |
+| `qwen2.5-0.5b` | 0.5B | 874 MB | none declared |
+
+Only models shipping `genai_config.json` can be loaded by the engine, which rules out most
+small ONNX exports. Each entry pins a repository revision, so the same name always fetches
+the same bytes. The 0.5B option is the smallest by a wide margin, but its repository
+declares no licence and it writes noticeably weaker pairs.
+
+Choosing between the two free paths:
+
+| | `wyra[local]` | Ollama |
+|---|---|---|
+| Installed by pip | engine, 112 MB | nothing |
+| Installed outside pip | nothing | the Ollama app |
+| Smallest usable weights | 874 MB | 397 MB |
+| Schema enforced during decoding | yes | yes |
 
 ## Quickstart
 
@@ -60,8 +107,8 @@ from wyra import build_dataset
 result = build_dataset(
     "docs/clean_code.md",
     out_dir="dataset",
-    lang="pt-br",
-    system_prompt="Você é um tutor de boas práticas de programação.",
+    lang="en",
+    system_prompt="You are a programming best practices tutor.",
     validation_fraction=0.1,
 )
 print(result.report.summary())   # normalize: 10/10 -> dedup: 10/10
@@ -76,11 +123,11 @@ from wyra import build_dataset
 from wyra.generators import TemplateGenerator
 
 build_dataset(
-    "produtos.csv",
+    "products.csv",
     out_dir="dataset",
     generator=TemplateGenerator(
-        user="Qual o preço de {nome}?",
-        assistant="{nome} custa R$ {preco}.",
+        user="What is the price of {name}?",
+        assistant="{name} costs ${price}.",
     ),
 )
 ```
@@ -129,8 +176,11 @@ wyra build docs/*.md -o dataset --lang pt-br --valid 0.1 --system "Seja um tutor
 wyra build faq.txt   -o dataset --generator qa
 wyra build rows.csv  -o dataset --generator template --user "{pergunta}" --assistant "{resposta}"
 wyra build notas.txt -o dataset --generator llm-qa --provider ollama --model llama3.2:3b
+wyra build notas.txt -o dataset --generator llm-qa --provider local
 wyra validate dataset/train.jsonl
 wyra convert dataset/train.jsonl -o alpaca.jsonl --to alpaca
+wyra setup
+wyra setup --download phi-3.5-mini
 ```
 
 `wyra validate` exits non-zero when any record is invalid, so it drops straight into CI.
@@ -171,11 +221,12 @@ ever stored in code.
 
 | Variable | Meaning |
 |---|---|
-| `WYRA_PROVIDER` | `ollama` (default), `openai` or `gemini` |
+| `WYRA_PROVIDER` | `ollama` (default), `local`, `openai` or `gemini` |
 | `WYRA_MODEL` | model name, overriding the provider's default |
 | `OLLAMA_HOST` | defaults to `http://localhost:11434` |
 | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | the base URL also reaches Azure, vLLM, LM Studio and Groq |
 | `GEMINI_API_KEY` | `GOOGLE_API_KEY` is accepted too |
+| `WYRA_CACHE_DIR` | where embedded model weights are kept |
 
 A missing key fails immediately, with the exact variable to export, before any request.
 

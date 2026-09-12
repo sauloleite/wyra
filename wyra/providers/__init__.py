@@ -35,6 +35,12 @@ def _gemini(**kwargs: Any) -> CompletionProvider:
     return GeminiProvider(**kwargs)
 
 
+def _local(**kwargs: Any) -> CompletionProvider:
+    from .embedded import EmbeddedProvider
+
+    return EmbeddedProvider(**kwargs)
+
+
 def _fake(**kwargs: Any) -> CompletionProvider:
     return FakeCompletionProvider(**kwargs)
 
@@ -43,6 +49,7 @@ PROVIDERS: dict[str, ProviderFactory] = {
     "ollama": _ollama,
     "openai": _openai,
     "gemini": _gemini,
+    "local": _local,
     "fake": _fake,
 }
 

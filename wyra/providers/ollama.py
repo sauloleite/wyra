@@ -104,6 +104,38 @@ class OllamaProvider:
         return body
 
 
+def probe(
+    host: str = DEFAULT_OLLAMA_HOST, *, timeout: float = 2.0, opener: Opener | None = None
+) -> dict[str, Any] | None:
+    """Ask a local Ollama for its version and models. ``None`` when it is not reachable.
+
+    Used by ``wyra setup`` to report what is available instead of failing at generation time.
+    """
+    base = normalize_host(host)
+    open_url = opener or _urlopen
+    result: dict[str, Any] = {"host": base}
+    for path, key in (("/api/version", "version"), ("/api/tags", "models")):
+        try:
+            with open_url(request.Request(f"{base}{path}"), timeout) as response:
+                body = json.loads(response.read())
+        except Exception:
+            if key == "version":
+                return None
+            body = {}
+        if key == "version":
+            result["version"] = (
+                str(body.get("version", "unknown")) if isinstance(body, Mapping) else "unknown"
+            )
+        elif isinstance(body, Mapping) and isinstance(body.get("models"), list):
+            result["models"] = [
+                str(m.get("name"))
+                for m in body["models"]
+                if isinstance(m, Mapping) and m.get("name")
+            ]
+    result.setdefault("models", [])
+    return result
+
+
 def _error_body(exc: error.HTTPError) -> str:
     try:
         raw = exc.read().decode("utf-8", "replace")
