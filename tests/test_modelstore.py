@@ -395,3 +395,14 @@ def test_backoff_grows_then_stops_growing() -> None:
     assert delays[:3] == [2.0, 4.0, 8.0]
     assert delays[-1] == ms.MAX_BACKOFF_SECONDS
     assert all(later >= earlier for earlier, later in zip(delays, delays[1:], strict=False))
+
+
+def test_read_lineage_reads_a_directory_directly(tmp_path: Path) -> None:
+    assert ms.read_lineage(tmp_path) == {}
+    (tmp_path / ms.LINEAGE_FILE).write_text('{"revision": "abc"}', encoding="utf-8")
+    assert ms.read_lineage(tmp_path) == {"revision": "abc"}
+    assert ms.lineage("phi-3-mini", tmp_path.parent) == {}
+    target = tmp_path.parent / "phi-3-mini"
+    target.mkdir(exist_ok=True)
+    (target / ms.LINEAGE_FILE).write_text('{"revision": "def"}', encoding="utf-8")
+    assert ms.lineage("phi-3-mini", tmp_path.parent) == {"revision": "def"}

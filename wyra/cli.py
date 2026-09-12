@@ -203,11 +203,8 @@ def _setup(args: argparse.Namespace) -> int:
 
     print(f"embedded models (cache: {modelstore.cache_root(args.cache_dir)})")
     for row in modelstore.catalog_rows(args.cache_dir):
-        flags = []
-        if row["default"]:
-            flags.append("default")
-        if not row["cached"]:
-            flags.append("not downloaded")
+        flags = ["default"] if row["default"] else []
+        flags.append("cached" if row["cached"] else "not downloaded")
         licence = row["license"] if row["license"] != modelstore.UNDECLARED else "NO LICENCE"
         print(
             f"  {row['name']:14} {row['parameters']:>5}  {row['size_mb']:>5} MB  "

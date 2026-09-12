@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from ..domain import Completion, Message
-from ..errors import ConfigError, ProviderError
+from ..errors import ConfigError, ProviderError, WyraError
 
 GUIDANCE_TYPE = "json_schema"
 
@@ -79,6 +79,25 @@ class EmbeddedProvider:
                 self.model, cache_dir=self._cache_dir, download=self._download
             )
         return self._model_dir
+
+    def lineage(self) -> Mapping[str, Any]:
+        """Which weights this provider runs, so the dataset manifest can pin them.
+
+        A catalogue download leaves a record naming the repository and the exact revision;
+        "qwen2.5-0.5b" alone is only an alias, and an alias is not reproducible. The LLM
+        generator picks this up when a provider offers it, so the port stays unchanged and
+        provenance stays optional for adapters that have none.
+        """
+        from .modelstore import read_lineage
+
+        try:
+            path = self.model_path()
+        except WyraError:
+            return {}
+        record = dict(read_lineage(path))
+        record.setdefault("name", self.model)
+        record.setdefault("path", str(path))
+        return record
 
     def _load(self) -> tuple[Any, Any]:
         if self._loaded is not None:

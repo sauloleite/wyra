@@ -206,3 +206,35 @@ def test_fake_provider_helpers() -> None:
     assert provider.calls[0].prompt == ""
     with pytest.raises(ProviderError, match="no responses"):
         FakeCompletionProvider(responses=[]).complete([])
+
+
+class ProviderWithLineage(FakeCompletionProvider):
+    def lineage(self) -> dict[str, str]:
+        return {"repo": "microsoft/Phi-3.5-mini-instruct-onnx", "revision": "7230dcd"}
+
+
+class ProviderWithBrokenLineage(FakeCompletionProvider):
+    def lineage(self) -> dict[str, str]:
+        raise RuntimeError("the cache is gone")
+
+
+class ProviderWithOddLineage(FakeCompletionProvider):
+    def lineage(self) -> list[str]:
+        return ["not", "a", "mapping"]
+
+
+def test_describe_pins_the_weights_when_the_provider_knows_them() -> None:
+    described = dict(QAPairGenerator(ProviderWithLineage(responses=[PAIRS])).describe())
+    assert described["weights"] == {
+        "repo": "microsoft/Phi-3.5-mini-instruct-onnx",
+        "revision": "7230dcd",
+    }
+
+
+def test_describe_omits_weights_when_there_is_no_provenance() -> None:
+    assert "weights" not in dict(QAPairGenerator(FakeCompletionProvider()).describe())
+
+
+def test_broken_or_odd_provenance_never_breaks_a_build() -> None:
+    assert "weights" not in dict(QAPairGenerator(ProviderWithBrokenLineage()).describe())
+    assert "weights" not in dict(QAPairGenerator(ProviderWithOddLineage()).describe())

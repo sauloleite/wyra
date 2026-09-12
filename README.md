@@ -219,6 +219,10 @@ as a by-product rather than as paperwork:
 
 Same sources plus same seed give the same split, in any process.
 
+When an embedded model produced the data, `generator.params.weights` pins the repository
+and the revision of the weights it ran. A catalogue name such as `qwen2.5-0.5b` is only an
+alias, and an alias is not something a result can be reproduced from.
+
 ## Configuration
 
 Configuration comes from the environment. Nothing is read from a file and no credential is

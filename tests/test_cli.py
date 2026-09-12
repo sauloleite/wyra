@@ -139,8 +139,21 @@ def test_setup_reports_what_is_available(tmp_path: Path, monkeypatch, capsys) ->
     assert "gemini   credentials set" in out
     assert "super-secret-value" not in out  # a report never prints credential values
     assert "phi-3.5-mini" in out and "2782 MB" in out and "default" in out
+    assert "not downloaded" in out
     assert "NO LICENCE" in out  # the undeclared entry is called out
     assert "wyra setup --download" in out
+
+
+def test_setup_marks_a_cached_model_as_cached(tmp_path: Path, capsys) -> None:
+    from wyra.providers import modelstore
+
+    target = tmp_path / "phi-3-mini"
+    target.mkdir()
+    (target / modelstore.CONFIG_FILE).write_text("{}", encoding="utf-8")
+    main(["setup", "--cache-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    cached_row = next(line for line in out.splitlines() if "phi-3-mini " in line)
+    assert "cached" in cached_row and "not downloaded" not in cached_row
 
 
 def test_setup_reports_a_missing_credential(tmp_path: Path, monkeypatch, capsys) -> None:

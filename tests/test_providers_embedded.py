@@ -224,3 +224,32 @@ def test_the_registry_builds_it(tmp_path: Path) -> None:
         runtime=make_engine(),
     )
     assert provider.name == "local"
+
+
+def test_lineage_reports_the_pinned_weights(tmp_path: Path) -> None:
+    from wyra.providers.modelstore import LINEAGE_FILE
+
+    (tmp_path / LINEAGE_FILE).write_text(
+        json.dumps(
+            {
+                "name": "qwen2.5-0.5b",
+                "repo": "acme/qwen-onnx",
+                "revision": "5c2e56e94edeb740724f082a0b2dc433ae095481",
+                "license": "undeclared",
+            }
+        ),
+        encoding="utf-8",
+    )
+    record = EmbeddedProvider("qwen2.5-0.5b", model_dir=tmp_path).lineage()
+    assert record["repo"] == "acme/qwen-onnx"
+    assert record["revision"] == "5c2e56e94edeb740724f082a0b2dc433ae095481"
+    assert record["path"] == str(tmp_path)
+
+
+def test_lineage_falls_back_to_the_name_and_path(tmp_path: Path) -> None:
+    record = EmbeddedProvider("phi-3-mini", model_dir=tmp_path).lineage()
+    assert record == {"name": "phi-3-mini", "path": str(tmp_path)}
+
+
+def test_lineage_is_empty_when_the_weights_are_not_there(tmp_path: Path) -> None:
+    assert EmbeddedProvider("qwen2.5-0.5b", cache_dir=tmp_path).lineage() == {}

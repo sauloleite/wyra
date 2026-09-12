@@ -250,9 +250,9 @@ def fetch(
     return target
 
 
-def lineage(name: str, cache_dir: str | Path | None = None) -> dict[str, Any]:
-    """What was downloaded for this model, for the dataset manifest."""
-    path = model_dir(name, cache_dir) / LINEAGE_FILE
+def read_lineage(directory: str | Path) -> dict[str, Any]:
+    """Read the provenance record a download left in a model directory."""
+    path = Path(directory) / LINEAGE_FILE
     if not path.is_file():
         return {}
     try:
@@ -260,6 +260,11 @@ def lineage(name: str, cache_dir: str | Path | None = None) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def lineage(model: str | CatalogEntry, cache_dir: str | Path | None = None) -> dict[str, Any]:
+    """What was downloaded for this model, for the dataset manifest."""
+    return read_lineage(model_dir(model, cache_dir))
 
 
 def _write_lineage(directory: Path, entry: CatalogEntry, files: Sequence[tuple[str, int]]) -> None:

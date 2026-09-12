@@ -98,7 +98,7 @@ class LLMExampleGenerator(ABC):
     # --- skeleton --------------------------------------------------------------
 
     def describe(self) -> Mapping[str, Any]:
-        return {
+        described: dict[str, Any] = {
             "provider": self.provider.name,
             "model": self.provider.model,
             "lang": self.prompts.lang,
@@ -110,6 +110,10 @@ class LLMExampleGenerator(ABC):
             "prompt_sha256": self.prompt_fingerprint(),
             "system": self.system,
         }
+        weights = _provider_lineage(self.provider)
+        if weights:
+            described["weights"] = weights
+        return described
 
     def prompt_fingerprint(self) -> str:
         """Hash of the exact instructions used, so a manifest pins the prompt version."""
@@ -175,6 +179,18 @@ class LLMExampleGenerator(ABC):
         if not answer or not source:
             return True
         return len(answer & source) / len(answer) >= self.min_grounding
+
+
+def _provider_lineage(provider: CompletionProvider) -> Mapping[str, Any]:
+    """Optional provenance from a provider. Most have none, and that must never fail a build."""
+    hook = getattr(provider, "lineage", None)
+    if not callable(hook):
+        return {}
+    try:
+        data = hook()
+    except Exception:  # provenance is a nicety; losing it must not lose the dataset
+        return {}
+    return dict(data) if isinstance(data, Mapping) else {}
 
 
 def _terms(text: str) -> set[str]:
