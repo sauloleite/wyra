@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from wyra.domain import Document, Role
-from wyra.errors import GenerationError, ProviderError
+from wyra.domain import Completion, Document, Role
+from wyra.errors import GenerationError, ProviderError, TruncatedOutputError
 from wyra.generators.llm import InstructionGenerator, QAPairGenerator, extract_json
 from wyra.prompts import PT_BR
 from wyra.providers import FakeCompletionProvider
@@ -61,6 +61,7 @@ def test_the_request_carries_the_schema_temperature_and_language() -> None:
     assert call.temperature == 0.7
     assert call.json_schema is not None
     assert call.json_schema["properties"]["pairs"]["items"]["required"] == ["question", "answer"]
+    assert call.json_schema["properties"]["pairs"]["maxItems"] == 4
     assert call.json_schema["additionalProperties"] is False
     assert call.messages[0].role is Role.SYSTEM
     assert "Você escreve dados de treinamento" in call.messages[0].content
@@ -145,10 +146,22 @@ def test_provider_errors_propagate_untouched() -> None:
         list(QAPairGenerator(provider).generate(DOC))
 
 
-def test_truncated_output_is_reported_as_such() -> None:
-    provider = FakeCompletionProvider(responses=[PAIRS], finish_reason="length")
-    with pytest.raises(GenerationError, match="truncated"):
-        list(QAPairGenerator(provider).generate(DOC))
+def test_a_truncated_reply_that_still_parses_is_used_not_discarded() -> None:
+    # the schema was satisfied and filler followed; throwing the payload away would be waste
+    provider = FakeCompletionProvider(
+        responses=[f"{PAIRS}\n\nmais uma pergunta"], finish_reason="length"
+    )
+    assert len(list(QAPairGenerator(provider).generate(DOC))) == 2
+    assert len(provider.calls) == 1
+
+
+def test_truncated_output_with_nothing_usable_is_reported() -> None:
+    provider = FakeCompletionProvider(
+        responses=['{"pairs": [{"question": "q?"'], finish_reason="length"
+    )
+    with pytest.raises(TruncatedOutputError, match="usable JSON"):
+        list(QAPairGenerator(provider, per_chunk=1).generate(DOC))
+    assert len(provider.calls) == 1  # no point asking again for the same size
 
 
 def test_oversized_chunks_are_refused_before_the_call() -> None:
@@ -184,7 +197,7 @@ def test_instruction_generator_merges_input_into_the_question() -> None:
     )
     assert len(examples) == 1
     assert examples[0].messages[0].content == "Explique a regra do escoteiro.\n\nEm uma frase."
-    schema = InstructionGenerator(FakeCompletionProvider()).response_schema()
+    schema = InstructionGenerator(FakeCompletionProvider()).response_schema(3)
     assert schema["properties"]["items"]["items"]["required"] == ["instruction", "input", "output"]
 
 
@@ -238,3 +251,60 @@ def test_describe_omits_weights_when_there_is_no_provenance() -> None:
 def test_broken_or_odd_provenance_never_breaks_a_build() -> None:
     assert "weights" not in dict(QAPairGenerator(ProviderWithBrokenLineage()).describe())
     assert "weights" not in dict(QAPairGenerator(ProviderWithOddLineage()).describe())
+
+
+def truncated(text: str = "{") -> Completion:
+    return Completion(text=text, model="fake-model", finish_reason="length")
+
+
+def test_a_truncated_reply_asks_for_fewer_items_instead_of_losing_the_chunk() -> None:
+    provider = FakeCompletionProvider(responses=[truncated(), PAIRS])
+    examples = list(QAPairGenerator(provider, prompts=PT_BR, per_chunk=4).generate(DOC))
+
+    assert len(examples) == 2
+    assert len(provider.calls) == 2
+    assert "escreva 4 pares" in provider.calls[0].messages[-1].content
+    assert "escreva 2 pares" in provider.calls[1].messages[-1].content
+
+
+def test_the_request_halves_until_it_reaches_one_then_reports_truncation() -> None:
+    provider = FakeCompletionProvider(responses=[truncated()])
+    with pytest.raises(TruncatedOutputError, match="ran out of room"):
+        list(QAPairGenerator(provider, prompts=PT_BR, per_chunk=4).generate(DOC))
+
+    asked = [call.messages[-1].content for call in provider.calls]
+    assert [n for n in (4, 2, 1) if f"escreva {n} pares" in " ".join(asked)] == [4, 2, 1]
+    assert len(provider.calls) == 3
+
+
+def test_truncation_is_a_generation_error_so_builds_can_skip_it() -> None:
+    assert issubclass(TruncatedOutputError, GenerationError)
+    provider = FakeCompletionProvider(responses=[truncated()])
+    with pytest.raises(GenerationError):
+        list(QAPairGenerator(provider, per_chunk=1).generate(DOC))
+    assert len(provider.calls) == 1
+
+
+def test_a_prepared_completion_passes_through_the_fake_provider() -> None:
+    provider = FakeCompletionProvider(responses=[Completion(text=PAIRS, model="m")])
+    assert len(list(QAPairGenerator(provider).generate(DOC))) == 2
+
+
+def test_the_schema_caps_the_array_so_decoding_cannot_run_away() -> None:
+    pairs = QAPairGenerator(FakeCompletionProvider()).response_schema(3)["properties"]["pairs"]
+    assert (pairs["minItems"], pairs["maxItems"]) == (1, 3)
+    items = InstructionGenerator(FakeCompletionProvider()).response_schema(2)["properties"]["items"]
+    assert (items["minItems"], items["maxItems"]) == (1, 2)
+    assert (
+        QAPairGenerator(FakeCompletionProvider()).response_schema(0)["properties"]["pairs"][
+            "maxItems"
+        ]
+        == 1
+    )
+
+
+def test_a_halved_request_also_narrows_the_schema() -> None:
+    provider = FakeCompletionProvider(responses=[truncated(), PAIRS])
+    list(QAPairGenerator(provider, prompts=PT_BR, per_chunk=4).generate(DOC))
+    caps = [call.json_schema["properties"]["pairs"]["maxItems"] for call in provider.calls]
+    assert caps == [4, 2]

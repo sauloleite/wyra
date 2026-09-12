@@ -34,7 +34,7 @@ class OllamaProvider:
         *,
         host: str = DEFAULT_OLLAMA_HOST,
         timeout: float = 120.0,
-        num_predict: int = 1024,
+        num_predict: int = 2048,
         opener: Opener | None = None,
         settings: Settings | None = None,
     ) -> None:

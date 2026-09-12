@@ -102,6 +102,34 @@ Choosing between the two free paths:
 | Smallest usable weights | 874 MB | 397 MB |
 | Schema enforced during decoding | yes | yes |
 
+### What the two catalogue models actually cost
+
+Measured on an 8 GB Mac with roughly 1.3 GB free, generating on the CPU:
+
+| | `qwen2.5-0.5b` | `phi-3.5-mini` |
+|---|---|---|
+| Load plus first reply | 3 s | 6 min |
+| Generation speed | 13 tokens/s | 0.3 tokens/s |
+| Peak memory | 612 MB | 3.0 GB |
+| Answers | often wrong | accurate |
+
+The 0.5B model is fast and writes weak pairs: asked what refactoring is, it described
+reviewing documents. The 3.8B model answered correctly and produced clean, faithful pairs,
+but 2.7 GB of weights against 1.3 GB of free memory means constant paging, and a run that
+should take a minute took sixteen. Give it real free memory or stay on the small model,
+and in both cases read a sample before you train.
+
+The input size matters more than any setting. Constrained decoding guarantees the shape of
+the output, never the competence of the model: asked for pairs from 651 characters of
+source the 0.5B model answers cleanly, and at 910 it emits an opening brace followed by
+whitespace until it runs out of room. Nothing in a prompt or a schema fixes that, so the
+default chunk for model-backed generation is 600 characters, and the error a degenerate
+reply produces says to reduce it further or use a stronger model.
+
+Two smaller safeguards sit behind that. A reply that hits the output limit but still
+carries usable JSON is used rather than discarded, and a request that runs out of room is
+halved and retried, down to a single item.
+
 ## Quickstart
 
 ### Markdown into JSONL, no model

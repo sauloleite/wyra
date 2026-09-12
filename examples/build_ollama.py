@@ -33,7 +33,7 @@ result = build_dataset(
     HERE / "data" / "clean_code.md",
     HERE / "out" / "ollama",
     generator=generator,
-    chunker=ParagraphChunker(max_chars=2000),
+    chunker=ParagraphChunker(max_chars=800),
     validation_fraction=0.1,
     on_error="skip",
 )

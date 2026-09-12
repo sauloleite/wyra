@@ -24,7 +24,10 @@ from .writers import JsonlWriter
 
 __all__ = ["build_dataset", "convert_jsonl", "validate_jsonl"]
 
-DEFAULT_CHUNK_CHARS = 3000
+# Measured, not guessed: qwen2.5-0.5b answers cleanly up to about 650 characters of source
+# (280 prompt tokens) and degenerates into whitespace at 910. Smaller chunks also raise the
+# signal-to-noise ratio of the context, which helps capable models too.
+DEFAULT_CHUNK_CHARS = 600
 
 
 def build_dataset(

@@ -53,6 +53,8 @@ class FakeCompletionProvider:
         reply = self.responses[index]
         if isinstance(reply, BaseException):
             raise reply
+        if isinstance(reply, Completion):
+            return reply
         if isinstance(reply, Callable):  # type: ignore[arg-type]
             reply = reply(messages)
         return Completion(

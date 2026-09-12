@@ -80,7 +80,7 @@ def test_prose_with_a_fake_provider_chunks_and_generates(tmp_path: Path) -> None
     assert result.manifest.chunker["name"] == "paragraphs"
     assert result.manifest.generator["params"]["provider"] == "fake"
     assert result.counts["kept"] == 1
-    # both paragraphs fit the default 3000-char budget, so one chunk means one call
+    # both paragraphs fit the default chunk budget, so one chunk means one call
     assert len(provider.calls) == 1
     assert "hábito diário" in provider.calls[0].messages[-1].content
 
@@ -161,3 +161,18 @@ def test_build_examples_writes_a_validation_file(tmp_path: Path) -> None:
     assert result.validation_path.name == "data.validation.jsonl"
     assert result.counts["train"] == 8 and result.counts["validation"] == 2
     assert result.manifest.generator["name"] == "prebuilt"
+
+
+def test_the_default_chunk_size_suits_the_weakest_catalogue_model() -> None:
+    from wyra.pipeline import DEFAULT_CHUNK_CHARS, _default_chunker
+    from wyra.providers import FakeCompletionProvider
+
+    # measured: the 0.5B model works at 651 source characters and degenerates at 910
+    assert DEFAULT_CHUNK_CHARS <= 650
+
+    chunker = _default_chunker(QAPairGenerator(FakeCompletionProvider()))
+    assert chunker.name == "paragraphs"
+    long_text = "\n\n".join(["parágrafo com algum conteúdo de verdade aqui." * 4] * 6)
+    chunks = list(chunker.chunk(Document(long_text, source="p.txt")))
+    assert len(chunks) > 1
+    assert all(len(chunk.text) <= DEFAULT_CHUNK_CHARS for chunk in chunks)

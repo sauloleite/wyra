@@ -19,6 +19,14 @@ class GenerationError(WyraError):
     """Model output could not be turned into examples (not JSON, wrong shape, truncated)."""
 
 
+class TruncatedOutputError(GenerationError):
+    """The model hit its output limit before finishing.
+
+    Distinct from other generation failures because the remedy is different: ask for fewer
+    items, or give the model more room, rather than retrying the same request.
+    """
+
+
 class ValidationError(WyraError):
     """A record or message violates the dataset schema.
 

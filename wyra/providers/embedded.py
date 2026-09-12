@@ -41,7 +41,7 @@ class EmbeddedProvider:
         *,
         model_dir: str | Path | None = None,
         cache_dir: str | Path | None = None,
-        max_new_tokens: int = 1024,
+        max_new_tokens: int = 2048,
         download: bool = False,
         runtime: Any | None = None,
         settings: Any | None = None,

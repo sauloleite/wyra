@@ -16,6 +16,7 @@ from .errors import (
     FormatError,
     GenerationError,
     ProviderError,
+    TruncatedOutputError,
     ValidationError,
     WyraError,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "Message",
     "ProviderError",
     "Role",
+    "TruncatedOutputError",
     "ValidationError",
     "ValidationReport",
     "WyraError",

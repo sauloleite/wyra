@@ -14,17 +14,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import unicodedata
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any
 
-from ..domain import Completion, Document, Example, Message, Role
-from ..errors import GenerationError
+from ..domain import Document, Example, Message, Role
+from ..errors import GenerationError, TruncatedOutputError
 from ..ports import CompletionProvider, TokenCounter
 from ..prompts import EN, Prompts
 from ..tokens import ApproxTokenCounter
+
+logger = logging.getLogger("wyra")
 
 PROMPT_VERSION = "1"
 _FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*|\s*```\s*$")
@@ -84,12 +87,18 @@ class LLMExampleGenerator(ABC):
     # --- hooks -----------------------------------------------------------------
 
     @abstractmethod
-    def task_prompt(self, doc: Document) -> str:
-        """The user message asking for examples from this chunk."""
+    def task_prompt(self, doc: Document, count: int) -> str:
+        """The user message asking for ``count`` examples from this chunk."""
 
     @abstractmethod
-    def response_schema(self) -> Mapping[str, Any]:
-        """A flat JSON schema every provider dialect accepts."""
+    def response_schema(self, count: int) -> Mapping[str, Any]:
+        """A flat JSON schema every provider dialect accepts, bounded to ``count`` items.
+
+        The bound is the point. Constrained decoding follows the schema, not the prose, so
+        an array without ``maxItems`` lets a weak model emit items until it runs out of
+        output budget and never closes the bracket. Asking for three in the prompt is a
+        request; ``maxItems`` is a guarantee.
+        """
 
     @abstractmethod
     def parse(self, payload: Any, doc: Document) -> Iterator[Example]:
@@ -117,35 +126,61 @@ class LLMExampleGenerator(ABC):
 
     def prompt_fingerprint(self) -> str:
         """Hash of the exact instructions used, so a manifest pins the prompt version."""
-        material = f"{PROMPT_VERSION}|{self.prompts.qa_system}|{self.task_prompt(_SAMPLE)}"
+        material = (
+            f"{PROMPT_VERSION}|{self.prompts.qa_system}|{self.task_prompt(_SAMPLE, self.per_chunk)}"
+        )
         return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
     def generate(self, doc: Document) -> Iterator[Example]:
         if not doc.text.strip():
             return
         self._guard_size(doc)
-        messages = [
-            Message(Role.SYSTEM, self.prompts.qa_system),
-            Message(Role.USER, self.task_prompt(doc)),
-        ]
-        payload = self._ask(messages)
+        payload = self._ask_for(doc, self.per_chunk)
         for example in self.parse(payload, doc):
             if self._grounded(example, doc):
                 yield example
 
-    def _ask(self, messages: list[Message]) -> Any:
+    def _ask_for(self, doc: Document, wanted: int) -> Any:
+        """Ask for ``wanted`` items, halving the request when the model runs out of room.
+
+        A truncated reply used to lose the whole chunk, which on a local model with a modest
+        output budget was the common case rather than the exception.
+        """
+        while True:
+            try:
+                return self._ask(doc, wanted)
+            except TruncatedOutputError:
+                if wanted <= 1:
+                    raise
+                wanted = max(1, wanted // 2)
+                logger.info(
+                    "%s truncated its output; asking for %d item(s) instead",
+                    self.provider.model,
+                    wanted,
+                )
+
+    def _ask(self, doc: Document, wanted: int) -> Any:
         """Call the provider, retrying once when the reply is not usable JSON."""
+        messages = [
+            Message(Role.SYSTEM, self.prompts.qa_system),
+            Message(Role.USER, self.task_prompt(doc, wanted)),
+        ]
         attempt = 0
         while True:
             completion = self.provider.complete(
                 messages,
-                json_schema=self.response_schema(),
+                json_schema=self.response_schema(wanted),
                 temperature=self.temperature,
             )
-            self._guard_truncation(completion)
             try:
                 return extract_json(completion.text)
             except GenerationError:
+                if completion.finish_reason == "length":
+                    raise TruncatedOutputError(
+                        "the model ran out of room before producing usable JSON; small "
+                        "local models degenerate on long inputs, so reduce the chunker's "
+                        "max_chars or use a stronger model"
+                    ) from None
                 if attempt >= self.max_retries:
                     raise
                 attempt += 1
@@ -161,13 +196,6 @@ class LLMExampleGenerator(ABC):
             raise GenerationError(
                 f"chunk {doc.ref} is {tokens} tokens, above max_input_tokens="
                 f"{self.max_input_tokens}; use a chunker"
-            )
-
-    @staticmethod
-    def _guard_truncation(completion: Completion) -> None:
-        if completion.finish_reason == "length":
-            raise GenerationError(
-                "model output was truncated; lower per_chunk or raise the output limit"
             )
 
     def _grounded(self, example: Example, doc: Document) -> bool:
@@ -205,15 +233,17 @@ class QAPairGenerator(LLMExampleGenerator):
 
     name = "llm-qa"
 
-    def task_prompt(self, doc: Document) -> str:
-        return self.prompts.qa_task.format(n=self.per_chunk, text=doc.text)
+    def task_prompt(self, doc: Document, count: int) -> str:
+        return self.prompts.qa_task.format(n=count, text=doc.text)
 
-    def response_schema(self) -> Mapping[str, Any]:
+    def response_schema(self, count: int) -> Mapping[str, Any]:
         return {
             "type": "object",
             "properties": {
                 "pairs": {
                     "type": "array",
+                    "minItems": 1,
+                    "maxItems": max(count, 1),
                     "items": {
                         "type": "object",
                         "properties": {
@@ -242,15 +272,17 @@ class InstructionGenerator(LLMExampleGenerator):
 
     name = "llm-instruction"
 
-    def task_prompt(self, doc: Document) -> str:
-        return self.prompts.instruction_task.format(n=self.per_chunk, text=doc.text)
+    def task_prompt(self, doc: Document, count: int) -> str:
+        return self.prompts.instruction_task.format(n=count, text=doc.text)
 
-    def response_schema(self) -> Mapping[str, Any]:
+    def response_schema(self, count: int) -> Mapping[str, Any]:
         return {
             "type": "object",
             "properties": {
                 "items": {
                     "type": "array",
+                    "minItems": 1,
+                    "maxItems": max(count, 1),
                     "items": {
                         "type": "object",
                         "properties": {
