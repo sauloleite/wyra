@@ -8,15 +8,20 @@ decoding to a JSON schema.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 from urllib import error, request
 
 from ..config import DEFAULT_MODELS, DEFAULT_OLLAMA_HOST, Settings, normalize_host
 from ..domain import Completion, Message
-from ..errors import ProviderError
+from ..errors import ConfigError, ProviderError
 
 Opener = Callable[[request.Request, float], Any]
+
+# JSON-schema structured output landed in Ollama 0.5.0. Older daemons only accept the
+# string "json" in `format` and reject a schema object with an opaque Go error.
+MIN_SCHEMA_VERSION = "0.5.0"
 
 
 def _urlopen(req: request.Request, timeout: float) -> Any:
@@ -84,7 +89,14 @@ class OllamaProvider:
             with self._open(req, self.timeout) as response:
                 raw = response.read()
         except error.HTTPError as exc:
-            raise ProviderError(f"Ollama returned HTTP {exc.code}: {_error_body(exc)}") from exc
+            body = _error_body(exc)
+            if exc.code == 400 and "format" in body and "of type string" in body:
+                raise ConfigError(
+                    f"the Ollama at {self.host} is too old for JSON-schema structured "
+                    f"output, which needs {MIN_SCHEMA_VERSION} or newer. Upgrade Ollama, "
+                    "or use a different provider."
+                ) from exc
+            raise ProviderError(f"Ollama returned HTTP {exc.code}: {body}") from exc
         except error.URLError as exc:
             raise ProviderError(
                 f"cannot reach Ollama at {self.host}: {exc.reason}. "
@@ -134,6 +146,21 @@ def probe(
             ]
     result.setdefault("models", [])
     return result
+
+
+def supports_schema(version: str, minimum: str = MIN_SCHEMA_VERSION) -> bool:
+    """Whether this Ollama accepts a JSON schema in ``format``.
+
+    An unparseable version is treated as capable: guessing "too old" would nag wrongly, and
+    a daemon that really cannot do it fails with a message that says so.
+    """
+    reported = _version_tuple(version)
+    return True if reported is None else reported >= _version_tuple(minimum)  # type: ignore[operator]
+
+
+def _version_tuple(version: str) -> tuple[int, ...] | None:
+    parts = re.findall(r"\d+", version)[:3]
+    return tuple(int(part) for part in parts) if len(parts) == 3 else None
 
 
 def _error_body(exc: error.HTTPError) -> str:

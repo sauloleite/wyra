@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 from typing import Any
 from urllib import error, request
@@ -7,8 +8,8 @@ from urllib import error, request
 import pytest
 
 from wyra.domain import Message, Role
-from wyra.errors import ProviderError
-from wyra.providers.ollama import OllamaProvider
+from wyra.errors import ConfigError, ProviderError
+from wyra.providers.ollama import MIN_SCHEMA_VERSION, OllamaProvider, supports_schema
 
 MESSAGES = [Message(Role.SYSTEM, "seja fiel"), Message(Role.USER, "gere pares")]
 SCHEMA = {"type": "object", "properties": {"pairs": {"type": "array"}}}
@@ -140,3 +141,48 @@ def test_settings_supply_the_host_and_model() -> None:
     provider = OllamaProvider(settings=settings, opener=opener_for({"message": {"content": "x"}}))
     assert provider.host == "http://gpu-box:11434"
     assert provider.model == "qwen3:4b"
+
+
+def test_an_old_daemon_gets_a_message_that_names_the_version() -> None:
+    body = json.dumps(
+        {
+            "error": (
+                "json: cannot unmarshal object into Go struct field "
+                "ChatRequest.format of type string"
+            )
+        }
+    ).encode()
+
+    def opener(req: request.Request, timeout: float) -> FakeResponse:
+        raise error.HTTPError(req.full_url, 400, "Bad Request", {}, io.BytesIO(body))  # type: ignore[arg-type]
+
+    with pytest.raises(ConfigError) as info:
+        OllamaProvider(opener=opener).complete(MESSAGES, json_schema=SCHEMA)
+    assert "too old for JSON-schema" in str(info.value)
+    assert MIN_SCHEMA_VERSION in str(info.value)
+
+
+def test_other_bad_requests_are_still_provider_errors() -> None:
+    def opener(req: request.Request, timeout: float) -> FakeResponse:
+        raise error.HTTPError(
+            req.full_url, 400, "Bad Request", {}, io.BytesIO(b'{"error": "model not found"}')
+        )  # type: ignore[arg-type]
+
+    with pytest.raises(ProviderError, match="model not found"):
+        OllamaProvider(opener=opener).complete(MESSAGES, json_schema=SCHEMA)
+
+
+@pytest.mark.parametrize(
+    ("version", "capable"),
+    [
+        ("0.4.2", False),
+        ("0.4.9", False),
+        ("0.5.0", True),
+        ("0.5.7-0-ga420a45-dirty", True),
+        ("1.2.3", True),
+        ("unknown", True),
+        ("", True),
+    ],
+)
+def test_supports_schema_reads_the_reported_version(version: str, capable: bool) -> None:
+    assert supports_schema(version) is capable

@@ -163,7 +163,7 @@ def _validate(args: argparse.Namespace) -> int:
 
 def _setup(args: argparse.Namespace) -> int:
     from .providers import modelstore
-    from .providers.ollama import probe
+    from .providers.ollama import MIN_SCHEMA_VERSION, probe, supports_schema
 
     if args.download:
         return _download_model(args, modelstore)
@@ -192,6 +192,11 @@ def _setup(args: argparse.Namespace) -> int:
     else:
         models = ", ".join(info["models"]) or "no models pulled yet: 'ollama pull llama3.2:3b'"
         print(f"  ollama   version {info['version']} at {info['host']}")
+        if not supports_schema(info["version"]):
+            print(
+                f"           too old for JSON schemas: upgrade to {MIN_SCHEMA_VERSION} "
+                "or newer, or generation will fail"
+            )
         print(f"           {models}")
     settings = Settings.from_env()
     for name, present in (

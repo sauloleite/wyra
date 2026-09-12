@@ -20,7 +20,7 @@ import pytest
 from wyra.domain import Document, Message, Role
 from wyra.generators import QAPairGenerator
 from wyra.prompts import PT_BR
-from wyra.providers.ollama import OllamaProvider
+from wyra.providers.ollama import MIN_SCHEMA_VERSION, OllamaProvider, supports_schema
 from wyra.validation import validate_records
 
 HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
@@ -32,20 +32,25 @@ TEXT = (
 )
 
 
-def _server_is_up() -> bool:
+def _server_is_capable() -> tuple[bool, str]:
+    """Structured output needs Ollama 0.5.0 or newer; an older daemon rejects the schema."""
     if not os.environ.get("WYRA_LIVE_TESTS"):
-        return False
+        return False, "set WYRA_LIVE_TESTS=1"
     url = HOST if "://" in HOST else f"http://{HOST}"
     try:
-        with urllib.request.urlopen(f"{url}/api/version", timeout=3):
-            return True
-    except (urllib.error.URLError, OSError):
-        return False
+        with urllib.request.urlopen(f"{url}/api/version", timeout=3) as response:
+            version = str(json.load(response).get("version", ""))
+    except (urllib.error.URLError, OSError, ValueError):
+        return False, "run Ollama"
+    if not supports_schema(version):
+        return False, f"Ollama {version} is older than {MIN_SCHEMA_VERSION}"
+    return True, ""
 
 
+_CAPABLE, _WHY = _server_is_capable()
 pytestmark = [
     pytest.mark.live,
-    pytest.mark.skipif(not _server_is_up(), reason="set WYRA_LIVE_TESTS=1 and run Ollama"),
+    pytest.mark.skipif(not _CAPABLE, reason=f"live Ollama unavailable: {_WHY}"),
 ]
 
 
