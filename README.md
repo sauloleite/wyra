@@ -49,7 +49,10 @@ pip install "wyra[local]"        # embedded model: no daemon, no key
 pip install "wyra[all]"          # everything above
 ```
 
-The Ollama adapter needs no extra: it speaks HTTP through the standard library.
+The Ollama adapter needs no extra: it speaks HTTP through the standard library. It does
+need **Ollama 0.5.0 or newer**, which is where a JSON schema in `format` arrived; on an
+older daemon the schema is rejected and `wyra` says so by name rather than passing along
+the server's error.
 
 Not sure what you have? Ask:
 
