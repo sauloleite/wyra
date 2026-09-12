@@ -203,3 +203,24 @@ def test_setup_downloads_when_accepted(tmp_path: Path, monkeypatch, capsys) -> N
 def test_setup_rejects_an_unknown_model(tmp_path: Path, capsys) -> None:
     assert main(["setup", "--download", "llama-999b", "--cache-dir", str(tmp_path)]) == 2
     assert "unknown local model" in capsys.readouterr().err
+
+
+def test_convert_skip_invalid_salvages_a_messy_file(fixtures: Path, tmp_path: Path, capsys) -> None:
+    destination = tmp_path / "salvaged.jsonl"
+    assert (
+        main(["convert", str(fixtures / "bad.jsonl"), "-o", str(destination), "--skip-invalid"])
+        == 0
+    )
+    assert "wrote 1 record(s)" in capsys.readouterr().out
+    assert main(["convert", str(fixtures / "bad.jsonl"), "-o", str(tmp_path / "x.jsonl")]) == 2
+    failure = capsys.readouterr().err
+    assert "bad.jsonl:1" in failure and "error:" in failure
+
+
+def test_validate_reads_a_compressed_dataset(fixtures: Path, tmp_path: Path, capsys) -> None:
+    import gzip
+
+    packed = tmp_path / "good.jsonl.gz"
+    packed.write_bytes(gzip.compress((fixtures / "good.jsonl").read_bytes()))
+    assert main(["validate", str(packed)]) == 0
+    assert "3/3 valid" in capsys.readouterr().out

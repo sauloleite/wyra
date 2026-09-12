@@ -81,9 +81,10 @@ def convert_jsonl(
     dedupe: bool = True,
     validation_fraction: float = 0.0,
     seed: int = 42,
+    on_invalid: str = "raise",
 ) -> BuildResult:
     """Re-encode an existing dataset into another format, normalizing and deduplicating."""
-    examples = list(read_examples(source, input_format=input_format))
+    examples = list(read_examples(source, input_format=input_format, on_invalid=on_invalid))
     return build_examples(
         examples,
         destination,

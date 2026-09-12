@@ -8,7 +8,7 @@ import pytest
 from wyra import build_dataset, build_examples, convert_jsonl
 from wyra.chunking import ParagraphChunker
 from wyra.domain import Document, Example
-from wyra.errors import ConfigError
+from wyra.errors import ConfigError, ValidationError
 from wyra.generators import QAPairGenerator
 from wyra.providers import FakeCompletionProvider
 
@@ -176,3 +176,22 @@ def test_the_default_chunk_size_suits_the_weakest_catalogue_model() -> None:
     chunks = list(chunker.chunk(Document(long_text, source="p.txt")))
     assert len(chunks) > 1
     assert all(len(chunk.text) <= DEFAULT_CHUNK_CHARS for chunk in chunks)
+
+
+def test_convert_can_skip_invalid_records(fixtures: Path, tmp_path: Path) -> None:
+    destination = tmp_path / "salvaged.jsonl"
+    result = convert_jsonl(fixtures / "bad.jsonl", destination, on_invalid="skip")
+    assert result.counts["kept"] == 1
+    assert destination.read_text(encoding="utf-8").count("\n") == 1
+
+    with pytest.raises(ValidationError):
+        convert_jsonl(fixtures / "bad.jsonl", tmp_path / "nope.jsonl")
+
+
+def test_a_compressed_dataset_converts(fixtures: Path, tmp_path: Path) -> None:
+    import gzip
+
+    packed = tmp_path / "sharegpt.jsonl.gz"
+    packed.write_bytes(gzip.compress((fixtures / "sharegpt.jsonl").read_bytes()))
+    result = convert_jsonl(packed, tmp_path / "out.jsonl")
+    assert result.counts["kept"] == 2

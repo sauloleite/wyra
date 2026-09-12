@@ -205,6 +205,23 @@ assert report.ok
 convert_jsonl("data/sharegpt.jsonl", "data/train.jsonl", output_format="openai-chat")
 ```
 
+`validate_jsonl` reads the file line by line and reports every problem it finds, with the
+line number, rather than stopping at the first: invalid JSON, unknown message keys,
+unrecognized roles, empty content, no assistant message, a conversation that does not end
+with the assistant. `wyra validate` exits non-zero when anything is wrong.
+
+Somebody else's dataset is rarely clean. `on_invalid="skip"` keeps the records that parse
+and logs the ones it drops, so a file that is 90 per cent good still gives you 90 per cent
+of a dataset:
+
+```python
+convert_jsonl("theirs.jsonl", "ours.jsonl", on_invalid="skip")
+```
+
+Input may be compressed. A `.gz`, `.xz` or `.bz2` file is decompressed as it is read, so a
+multi-gigabyte `.jsonl.gz` never lands in memory, and a file that is neither text nor a
+recognized archive says so instead of raising a codec error.
+
 ## Command line
 
 ```bash
@@ -215,6 +232,7 @@ wyra build notas.txt -o dataset --generator llm-qa --provider ollama --model lla
 wyra build notas.txt -o dataset --generator llm-qa --provider local
 wyra validate dataset/train.jsonl
 wyra convert dataset/train.jsonl -o alpaca.jsonl --to alpaca
+wyra convert theirs.jsonl.gz -o ours.jsonl --skip-invalid
 wyra setup
 wyra setup --download phi-3.5-mini
 ```
@@ -309,9 +327,10 @@ provider = FakeCompletionProvider(responses=['{"pairs": [{"question": "q?", "ans
 - **Fine-tuning teaches form, not facts.** Structured output, domain vocabulary, tone and
   refusal behaviour respond well to it. If the problem is "the model does not know our
   documents", the answer is retrieval, not weights.
-- **A schema check is not a quality check.** Validation guarantees the shape of every
-  record and never its meaning. Read a sample before you train, especially when a small
-  local model wrote it.
+- **A schema check is not a quality check.** Every record *is* verified against the
+  format, line by line, and `wyra validate` names each bad line and why. What no check
+  can tell you is whether the content is worth training on. Read a sample first,
+  especially when a small local model wrote it.
 - **Small models write weak pairs.** The grounding filter and deduplication remove the
   worst, not the mediocre.
 

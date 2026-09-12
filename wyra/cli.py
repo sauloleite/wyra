@@ -83,6 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--to", dest="output_format", default="openai-chat", choices=sorted(FORMATS)
     )
     convert.add_argument("--no-dedup", dest="dedupe", action="store_false")
+    convert.add_argument(
+        "--skip-invalid",
+        dest="on_invalid",
+        action="store_const",
+        const="skip",
+        default="raise",
+        help="drop records that do not parse instead of stopping",
+    )
 
     setup = subparsers.add_parser(
         "setup", help="report what is installed and available, and fetch a local model"
@@ -277,6 +285,7 @@ def _convert(args: argparse.Namespace) -> int:
         input_format=args.input_format,
         output_format=args.output_format,
         dedupe=args.dedupe,
+        on_invalid=args.on_invalid,
     )
     print(f"wrote {result.counts['kept']} record(s) to {args.out}")
     return EXIT_OK if result.counts["kept"] else EXIT_INVALID
