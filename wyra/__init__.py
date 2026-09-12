@@ -7,7 +7,7 @@ when the source is free prose, and always behind a port you can fake in tests.
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from .builder import BuildResult, DatasetBuilder, split_examples
 from .domain import Completion, Document, Example, Message, Role
