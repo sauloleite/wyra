@@ -171,7 +171,7 @@ result = build_dataset(
     system_prompt="You are a programming best practices tutor.",
     validation_fraction=0.1,
 )
-print(result.report.summary())   # normalize: 10/10 -> dedup: 10/10
+print(result.report.summary())  # normalize: 10/10 -> dedup: 10/10
 ```
 
 ### A table into thousands of examples
@@ -257,8 +257,11 @@ and because its destination is a file rather than a folder, its manifest sits be
 from wyra import build_examples, read_documents
 from wyra.generators import TemplateGenerator
 
-rows = read_documents("products.csv")
-examples = [e for doc in rows for e in TemplateGenerator(user="Price of {name}?", assistant="${price}").generate(doc)]
+generator = TemplateGenerator(user="Price of {name}?", assistant="${price}")
+examples = []
+for doc in read_documents("products.csv"):
+    examples.extend(generator.generate(doc))
+
 build_examples(examples, "dataset/train.jsonl", validation_fraction=0.1)
 ```
 
@@ -376,16 +379,18 @@ LLM generator, which shares real implementation.
 ```python
 from wyra import Document, Example, build_dataset
 
+
 class HeadlineGenerator:
     name = "headlines"
 
-    def describe(self):          # goes into the manifest
+    def describe(self):  # goes into the manifest
         return {"style": "news"}
 
     def generate(self, doc: Document):
         for line in doc.text.splitlines():
             if line.strip():
                 yield Example.qa("Write a headline for this text.", line, source=doc.ref)
+
 
 build_dataset("news.txt", out_dir="dataset", generator=HeadlineGenerator())
 ```
@@ -394,7 +399,14 @@ The six seams are defined in `wyra.ports` and re-exported from the package, so y
 type against them:
 
 ```python
-from wyra import Chunker, CompletionProvider, CurationStep, DatasetWriter, ExampleGenerator, TokenCounter
+from wyra import (
+    Chunker,
+    CompletionProvider,
+    CurationStep,
+    DatasetWriter,
+    ExampleGenerator,
+    TokenCounter,
+)
 ```
 
 Register a generator or a provider by name with `wyra.generators.register` or
