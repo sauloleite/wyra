@@ -21,21 +21,35 @@ from .errors import (
     WyraError,
 )
 from .pipeline import build_dataset, build_examples, convert_jsonl
+from .ports import (
+    Chunker,
+    CompletionProvider,
+    CurationStep,
+    DatasetWriter,
+    ExampleGenerator,
+    TokenCounter,
+)
 from .readers import read_documents, read_examples
 from .validation import ValidationReport, validate_jsonl
 
 __all__ = [
     "BuildResult",
+    "Chunker",
     "Completion",
+    "CompletionProvider",
     "ConfigError",
+    "CurationStep",
     "DatasetBuilder",
+    "DatasetWriter",
     "Document",
     "Example",
+    "ExampleGenerator",
     "FormatError",
     "GenerationError",
     "Message",
     "ProviderError",
     "Role",
+    "TokenCounter",
     "TruncatedOutputError",
     "ValidationError",
     "ValidationReport",

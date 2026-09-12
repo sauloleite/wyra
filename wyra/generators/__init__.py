@@ -50,7 +50,11 @@ _LOCALIZED = frozenset({"markdown", "continuation", "cloze", "llm-qa", "llm-inst
 
 
 def register(name: str, factory: GeneratorFactory) -> None:
-    """Add a generator to the registry, so ``--generator <name>`` finds it."""
+    """Add a generator to the registry, for callers in this process.
+
+    The ``wyra`` command is a separate process that never imports your code, so a generator
+    registered here is reachable from Python, not from ``--generator`` on the command line.
+    """
     GENERATORS[name] = factory
 
 

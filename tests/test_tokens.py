@@ -60,3 +60,32 @@ def test_tiktoken_counter_live() -> None:
     counter = TiktokenCounter()
     assert counter.name == "tiktoken:cl100k_base"
     assert counter.count("hello world") == 2
+
+
+def test_get_counter_resolves_by_name() -> None:
+    from wyra.tokens import get_counter
+
+    assert get_counter().name == "approx"
+    assert get_counter("approx").name == "approx"
+    assert get_counter(" APPROXIMATE ").name == "approx"
+    assert get_counter("").name == "approx"
+
+    instance = ApproxTokenCounter()
+    assert get_counter(instance) is instance
+
+    with pytest.raises(ConfigError, match="unknown token counter"):
+        get_counter("magic")
+
+
+def test_get_counter_builds_the_tiktoken_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    from types import ModuleType, SimpleNamespace
+
+    from wyra.tokens import get_counter
+
+    module = ModuleType("tiktoken")
+    module.get_encoding = lambda name: SimpleNamespace(encode=lambda text: text.split())  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "tiktoken", module)
+
+    assert get_counter("tiktoken").name == "tiktoken:cl100k_base"
+    assert get_counter("tiktoken:o200k_base").name == "tiktoken:o200k_base"

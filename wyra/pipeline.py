@@ -17,8 +17,9 @@ from .domain import Document, Example
 from .errors import ConfigError
 from .generators import create as create_generator
 from .generators import for_source, needs_provider
-from .ports import Chunker, CompletionProvider, CurationStep, ExampleGenerator
+from .ports import Chunker, CompletionProvider, CurationStep, ExampleGenerator, TokenCounter
 from .readers import read_documents, read_examples
+from .tokens import get_counter
 from .validation import validate_jsonl
 from .writers import JsonlWriter
 
@@ -46,6 +47,7 @@ def build_dataset(
     steps: Sequence[CurationStep] | None = None,
     max_tokens: int | None = None,
     dedupe: bool = True,
+    token_counter: str | TokenCounter | None = None,
     on_error: str = "skip",
     write_lineage: bool = False,
     **generator_kwargs: Any,
@@ -59,14 +61,16 @@ def build_dataset(
     resolved = _resolve_generator(
         generator, documents, provider, model, lang, system_prompt, generator_kwargs
     )
+    counter = get_counter(token_counter)
     builder = DatasetBuilder(
         resolved,
         chunker=chunker or _default_chunker(resolved),
-        steps=steps if steps is not None else _default_steps(dedupe, max_tokens),
+        steps=steps if steps is not None else _default_steps(dedupe, max_tokens, counter),
         writer=JsonlWriter(output_format),
         validation_fraction=validation_fraction,
         seed=seed,
         on_error=on_error,
+        token_counter=counter,
         write_lineage=write_lineage,
     )
     return builder.build(documents, out_dir)
@@ -82,6 +86,7 @@ def convert_jsonl(
     validation_fraction: float = 0.0,
     seed: int = 42,
     on_invalid: str = "raise",
+    token_counter: str | TokenCounter | None = None,
 ) -> BuildResult:
     """Re-encode an existing dataset into another format, normalizing and deduplicating."""
     examples = list(read_examples(source, input_format=input_format, on_invalid=on_invalid))
@@ -93,6 +98,7 @@ def convert_jsonl(
         validation_fraction=validation_fraction,
         seed=seed,
         source=str(source),
+        token_counter=token_counter,
     )
 
 
@@ -105,16 +111,19 @@ def build_examples(
     validation_fraction: float = 0.0,
     seed: int = 42,
     source: str = "<examples>",
+    token_counter: str | TokenCounter | None = None,
 ) -> BuildResult:
     """Curate and write examples you already have. The destination is a file, not a folder."""
     path = Path(destination)
     writer = JsonlWriter(output_format)
+    counter = get_counter(token_counter)
     builder = DatasetBuilder(
         _PreBuilt(list(examples), source),
-        steps=_default_steps(dedupe, None),
+        steps=_default_steps(dedupe, None, counter),
         writer=writer,
         validation_fraction=validation_fraction,
         seed=seed,
+        token_counter=counter,
     )
     # the carrier document is never read by _PreBuilt, but it must not be empty:
     # NoChunker drops blank documents, which is the right behaviour for real sources.
@@ -194,10 +203,12 @@ def _default_chunker(generator: ExampleGenerator) -> Chunker:
     )
 
 
-def _default_steps(dedupe: bool, max_tokens: int | None) -> tuple[CurationStep, ...]:
+def _default_steps(
+    dedupe: bool, max_tokens: int | None, counter: TokenCounter
+) -> tuple[CurationStep, ...]:
     steps: list[CurationStep] = [Normalize()]
     if dedupe:
         steps.append(Dedup())
     if max_tokens:
-        steps.append(TokenBudget(max_tokens))
+        steps.append(TokenBudget(max_tokens, counter=counter))
     return tuple(steps)

@@ -14,7 +14,7 @@ from .errors import FormatError, ValidationError
 from .formats import DatasetFormat, detect_format, get_format
 from .ports import TokenCounter
 from .readers import read_jsonl_lines
-from .tokens import ApproxTokenCounter, count_example_tokens
+from .tokens import count_example_tokens, get_counter
 
 DEFAULT_TOKEN_BUDGET = 16385
 
@@ -157,7 +157,7 @@ def validate_jsonl(
     path: str | Path,
     *,
     input_format: str = "auto",
-    counter: TokenCounter | None = None,
+    counter: str | TokenCounter | None = None,
     budget: int = DEFAULT_TOKEN_BUDGET,
     max_listed: int = 20,
 ) -> ValidationReport:
@@ -166,7 +166,7 @@ def validate_jsonl(
     return validate_records(
         parse_jsonl(path),
         fmt,
-        counter=counter if counter is not None else ApproxTokenCounter(),
+        counter=get_counter(counter),
         budget=budget,
         max_listed=max_listed,
         path=str(path),

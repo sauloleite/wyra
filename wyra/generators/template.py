@@ -106,6 +106,12 @@ class TemplateGenerator:
                     None,
                 )
                 return f"{{{question}}}", f"{{{answer}}}", context, system_col
+        if "messages" in columns or "conversations" in columns:
+            raise ConfigError(
+                "this looks like an existing chat dataset, not a table. Convert it with "
+                "'wyra convert FILE -o OUT' or wyra.convert_jsonl() instead of building "
+                "from it."
+            )
         raise ConfigError(
             "could not detect question/answer columns in "
             f"{sorted(columns)}; pass user= and assistant= templates"

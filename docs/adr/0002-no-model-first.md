@@ -27,6 +27,5 @@ normalization, deduplication, budgets, a seeded split and a manifest.
 
 ## Consequences
 
-The common case is reproducible, free and offline. Two examples run without any provider
-installed. The trade-off is a wider surface than a single `generate()` entry point, and a
+The common case is reproducible, free and offline. Three of the four examples run without any provider installed. The trade-off is a wider surface than a single `generate()` entry point, and a
 README that has to explain when a model is warranted, which is itself the useful lesson.

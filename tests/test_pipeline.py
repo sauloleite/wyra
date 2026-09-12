@@ -209,3 +209,59 @@ def test_a_provider_instance_can_be_passed_straight_in(tmp_path: Path) -> None:
     assert result.counts["kept"] == 1
     assert len(provider.calls) == 1
     assert result.manifest.generator["params"]["provider"] == "fake"
+
+
+def test_the_token_counter_reaches_the_manifest_and_the_budget(
+    fixtures: Path, tmp_path: Path
+) -> None:
+    class CountsWords:
+        name = "words"
+
+        def count(self, text: str) -> int:
+            return len(text.split())
+
+    result = build_dataset(fixtures / "qa.csv", tmp_path, token_counter=CountsWords())
+    assert result.manifest.stats["token_counter"] == "words"
+
+    # the same counter must drive the budget filter, not a second default one
+    tight = build_dataset(
+        fixtures / "qa.csv", tmp_path / "tight", token_counter=CountsWords(), max_tokens=3
+    )
+    assert tight.counts["kept"] < result.counts["kept"]
+    assert [s["step"] for s in tight.manifest.curation][-1] == "token_budget"
+
+
+def test_an_unknown_counter_name_is_a_configuration_error(fixtures: Path, tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="unknown token counter"):
+        build_dataset(fixtures / "qa.csv", tmp_path, token_counter="magic")
+
+
+def test_build_examples_and_convert_accept_a_counter(fixtures: Path, tmp_path: Path) -> None:
+    result = build_examples([Example.qa("q?", "a")], tmp_path / "d.jsonl", token_counter="approx")
+    assert result.manifest.stats["token_counter"] == "approx"
+    converted = convert_jsonl(fixtures / "good.jsonl", tmp_path / "c.jsonl", token_counter="approx")
+    assert converted.manifest.stats["token_counter"] == "approx"
+
+
+def test_an_existing_chat_dataset_is_pointed_at_convert(fixtures: Path, tmp_path: Path) -> None:
+    with pytest.raises(ConfigError, match="wyra convert"):
+        build_dataset(fixtures / "good.jsonl", tmp_path)
+    with pytest.raises(ConfigError, match="wyra convert"):
+        build_dataset(fixtures / "sharegpt.jsonl", tmp_path)
+    # an alpaca table is a table, and the tabular generator handles it
+    assert build_dataset(fixtures / "alpaca.jsonl", tmp_path / "alp").counts["kept"] == 2
+
+
+def test_the_extension_contract_is_importable_from_the_package() -> None:
+    import wyra
+
+    for name in (
+        "ExampleGenerator",
+        "CompletionProvider",
+        "Chunker",
+        "TokenCounter",
+        "CurationStep",
+        "DatasetWriter",
+    ):
+        assert hasattr(wyra, name), name
+        assert name in wyra.__all__

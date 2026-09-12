@@ -309,3 +309,21 @@ def test_installed_is_false_for_an_unusable_module_name() -> None:
     assert _installed("wyra") is True
     assert _installed("") is False
     assert _installed("definitely_not_a_module_xyz") is False
+
+
+def test_the_tokens_flag_selects_the_counter(fixtures: Path, tmp_path: Path, capsys) -> None:
+    import json
+
+    assert main(["build", str(fixtures / "qa.csv"), "-o", str(tmp_path), "--tokens", "approx"]) == 0
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["stats"]["token_counter"] == "approx"
+    capsys.readouterr()
+
+    assert main(["validate", str(fixtures / "good.jsonl"), "--tokens", "approx"]) == 0
+    assert "tokens (approx)" in capsys.readouterr().out
+
+    assert (
+        main(["build", str(fixtures / "qa.csv"), "-o", str(tmp_path / "x"), "--tokens", "magic"])
+        == 2
+    )
+    assert "unknown token counter" in capsys.readouterr().err

@@ -11,7 +11,7 @@ part of fine-tuning.
 
 ```bash
 pip install wyra
-wyra build docs/ -o dataset --valid 0.1
+wyra build docs/*.md -o dataset --valid 0.1
 ```
 
 No API key, no account, no network call.
@@ -23,11 +23,17 @@ invented. Use it whenever the source already carries the pairs:
 
 | Source | Generator | What becomes what |
 |---|---|---|
-| Markdown | `markdown` | heading becomes the question, section body becomes the answer |
+| Markdown | `markdown` | the heading fills a question template, the section body is the answer |
 | FAQ, articles, transcripts | `qa` | `Q:`/`A:` markers, or a question in prose answered by the next paragraph |
 | CSV, JSON, JSONL, database dumps | `template` | one template, rendered once per row |
-| Existing datasets (Alpaca, ShareGPT, chat) | `convert` | re-encoded, normalized, deduplicated |
 | Any prose | `continuation`, `cloze` | self-supervised: continue the text, or fill the blank |
+
+Every name in that column is a `--generator` value. An existing dataset is different: it is
+re-encoded, normalized and deduplicated by `wyra convert`, a separate subcommand, not by a
+generator. Pointing `build` at a chat dataset says so instead of guessing.
+
+`--generator` defaults to `auto`, which reads the extension of the **first** source and
+applies that one generator to all of them. With mixed file types, name the generator.
 
 **With a model, when the source is free prose and no pairs exist to extract.** A local
 model through [Ollama](https://ollama.com) costs nothing and needs no key; OpenAI-compatible
@@ -37,6 +43,10 @@ swapping one is a constructor argument, not a rewrite.
 Whichever path you take, everything after generation is deterministic code: schema
 validation, normalization, deduplication, length and token budgets, a seeded split, and a
 manifest recording where each example came from.
+
+Normalization and exact deduplication run by default. `curation.MinLength`,
+`curation.TokenBudget` and `curation.NearDuplicate`, which collapses reworded duplicates
+with MinHash, are opt-in through the `steps=` argument.
 
 ## Install
 
@@ -114,9 +124,10 @@ Choosing between the two free paths:
 | Smallest usable weights | 874 MB | 397 MB |
 | Schema enforced during decoding | yes | yes |
 
-### What the two catalogue models actually cost
+### What these models actually cost
 
-Measured on an 8 GB Mac with roughly 1.3 GB free, generating on the CPU:
+Measured on an 8 GB Mac with roughly 1.3 GB free, generating on the CPU. `phi-3-mini` is
+not listed because it is the same size and vintage as `phi-3.5-mini`:
 
 | | `qwen2.5-0.5b` | `phi-3.5-mini` |
 |---|---|---|
@@ -141,6 +152,10 @@ reply produces says to reduce it further or use a stronger model.
 Two smaller safeguards sit behind that. A reply that hits the output limit but still
 carries usable JSON is used rather than discarded, and a request that runs out of room is
 halved and retried, down to a single item.
+
+Chunk size is the knob: `chunking.ParagraphChunker(max_chars=...)` groups whole paragraphs
+and never splits a code fence, and `chunking.WindowChunker(max_tokens=...)` does the same
+against a token budget. Pass either as `chunker=`.
 
 ## Quickstart
 
@@ -217,7 +232,9 @@ convert_jsonl("data/sharegpt.jsonl", "data/train.jsonl", output_format="openai-c
 `validate_jsonl` reads the file line by line and reports every problem it finds, with the
 line number, rather than stopping at the first: invalid JSON, unknown message keys,
 unrecognized roles, empty content, no assistant message, a conversation that does not end
-with the assistant. `wyra validate` exits non-zero when anything is wrong.
+with the assistant. `wyra validate` exits non-zero when any record is invalid. Records
+over the token budget are counted and printed, but they do not fail it: a long example is
+not a malformed one.
 
 Somebody else's dataset is rarely clean. `on_invalid="skip"` keeps the records that parse
 and logs the ones it drops, so a file that is 90 per cent good still gives you 90 per cent
@@ -230,6 +247,20 @@ convert_jsonl("theirs.jsonl", "ours.jsonl", on_invalid="skip")
 Input may be compressed. A `.gz`, `.xz` or `.bz2` file is decompressed as it is read, so a
 multi-gigabyte `.jsonl.gz` never lands in memory, and a file that is neither text nor a
 recognized archive says so instead of raising a codec error.
+
+Three more entry points. `read_documents` and `read_examples` hand you `Document`s and
+`Example`s without building anything. `build_examples` writes examples you already have,
+and because its destination is a file rather than a folder, its manifest sits beside it as
+`<name>.jsonl.manifest.json`:
+
+```python
+from wyra import build_examples, read_documents
+from wyra.generators import TemplateGenerator
+
+rows = read_documents("products.csv")
+examples = [e for doc in rows for e in TemplateGenerator(user="Price of {name}?", assistant="${price}").generate(doc)]
+build_examples(examples, "dataset/train.jsonl", validation_fraction=0.1)
+```
 
 ## Command line
 
@@ -249,15 +280,50 @@ wyra setup --download qwen2.5-0.5b --yes --cache-dir ./models
 
 `wyra validate` exits non-zero when any record is invalid, so it drops straight into CI.
 
+Options the examples above do not show:
+
+| Flag | What it does |
+|---|---|
+| `--seed N` | changes the deterministic split, 42 by default |
+| `--no-dedup` | keeps duplicates instead of dropping them |
+| `--max-tokens N` | drops examples above a token budget |
+| `--tokens tiktoken` | exact token counts instead of the approximation |
+| `--per-chunk N` | how many examples to ask a model for, per chunk |
+| `--on-error raise` | stop at the first generation failure instead of skipping the chunk |
+| `--lineage` | also write `lineage.jsonl`, one row per example naming its source chunk |
+| `--budget N` | the per-example token budget `validate` reports against |
+| `-v`, `--verbose` | log what is happening, including retries and skipped chunks |
+
 ## Output formats
 
 `openai-chat` (the default, also used by Azure OpenAI, TRL, Axolotl and Unsloth), `alpaca`
-and `sharegpt`. Pick one with `--format` or `output_format=`.
+and `sharegpt`. `wyra build` picks the output with `--format`; `wyra convert` uses `--to`
+for the output and `--from` for the input; in Python it is `output_format=`.
 
-Validation follows the OpenAI cookbook rules exactly, and reports every problem instead of
-stopping at the first: unknown message keys, unrecognized roles, empty content, a missing
-assistant message, a conversation that does not end with the assistant, and invalid JSON,
-each with the line number.
+Validation reports every problem instead of stopping at the first, each with its line
+number: invalid JSON, a record that is not an object, a missing or malformed `messages`
+list, unknown message keys, unrecognized roles, empty content, tool calls (not supported in
+0.1.0), no assistant message, a conversation that does not end with the assistant, and a
+record whose format cannot be determined.
+
+## Counting tokens
+
+Token counts drive the `--max-tokens` filter and the statistics in the manifest and in
+`wyra validate`. The default counter is an approximation that needs no dependency. For the
+exact counts an OpenAI model will see, install `wyra[tokens]` and ask for it:
+
+```bash
+wyra build docs/*.md -o dataset --tokens tiktoken --max-tokens 16385
+wyra validate dataset/train.jsonl --tokens tiktoken
+```
+
+```python
+build_dataset("docs/*.md", out_dir="dataset", token_counter="tiktoken")
+validate_jsonl("dataset/train.jsonl", counter="tiktoken:o200k_base")
+```
+
+Per-example accounting follows the OpenAI cookbook: three tokens per message, one more for
+a `name`, three for the assistant priming.
 
 ## The manifest
 
@@ -267,12 +333,16 @@ as a by-product rather than as paperwork:
 ```json
 {
   "wyra_version": "0.1.0",
+  "created_at": "2026-09-12T16:31:34Z",
   "generator": {"name": "llm-qa", "params": {"model": "llama3.2:3b", "prompt_sha256": "d36f…"}},
+  "chunker": {"name": "paragraphs"},
   "sources": [{"source": "docs/clean_code.md", "sha256": "9c1a…", "chars": 11866}],
   "curation": [{"step": "normalize", "in": 17, "out": 17}, {"step": "dedup", "in": 17, "out": 15}],
-  "counts": {"generated": 17, "kept": 15, "train": 14, "validation": 1, "errors": 0},
+  "counts": {"generated": 17, "kept": 15, "train": 14, "validation": 1, "errors": 1},
+  "errors": [{"source": "docs/clean_code.md#7", "error": "TruncatedOutputError: …"}],
   "split": {"validation_fraction": 0.1, "seed": 42},
-  "stats": {"token_counter": "approx", "tokens": {"min": 42, "max": 116, "mean": 68.5}}
+  "output": {"format": "openai-chat", "files": [{"name": "train.jsonl", "records": 14, "sha256": "…"}]},
+  "stats": {"token_counter": "approx", "tokens": {"min": 42, "max": 116, "mean": 68.5, "total": 1028}}
 }
 ```
 
@@ -320,9 +390,20 @@ class HeadlineGenerator:
 build_dataset("news.txt", out_dir="dataset", generator=HeadlineGenerator())
 ```
 
-Ports: `ExampleGenerator`, `CompletionProvider`, `Chunker`, `TokenCounter`, `CurationStep`,
-`DatasetWriter`. Register a generator or a provider by name with
-`wyra.generators.register` or `wyra.providers.register`.
+The six seams are defined in `wyra.ports` and re-exported from the package, so you can
+type against them:
+
+```python
+from wyra import Chunker, CompletionProvider, CurationStep, DatasetWriter, ExampleGenerator, TokenCounter
+```
+
+Register a generator or a provider by name with `wyra.generators.register` or
+`wyra.providers.register`. A provider factory is called with `model` and `settings`
+keywords, so it has to accept both, and a name registered in your process is reachable from
+Python but not from the `wyra` command, which never imports your code.
+
+`writers.InMemoryWriter` keeps the encoded records in memory instead of on disk, which is
+what you want when asserting on them in a test.
 
 Testing your own generator needs no network and no key:
 
@@ -354,7 +435,7 @@ from wyra import build_dataset
 from wyra.generators import QAPairGenerator
 from wyra.providers import create
 
-build_dataset(source, out_dir="dataset", generator=QAPairGenerator(create("gemini")))
+build_dataset("notes.txt", out_dir="dataset", generator=QAPairGenerator(create("gemini")))
 ```
 
 The API key now comes from `GEMINI_API_KEY`. **Versions up to 0.0.6 contained a hardcoded

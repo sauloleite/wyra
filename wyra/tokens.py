@@ -49,6 +49,29 @@ class TiktokenCounter:
         return len(self._encoding.encode(text))
 
 
+def get_counter(spec: str | TokenCounter | None = None) -> TokenCounter:
+    """Resolve a token counter from a name.
+
+    ``None`` and "approx" need no dependency. "tiktoken" and "tiktoken:<encoding>" give exact
+    counts for OpenAI models and need ``pip install 'wyra[tokens]'``. Without this the extra
+    would be advertised and unreachable.
+    """
+    if spec is None:
+        return ApproxTokenCounter()
+    if not isinstance(spec, str):
+        return spec
+    name = spec.strip().lower()
+    if name in ("", "approx", "approximate"):
+        return ApproxTokenCounter()
+    if name == "tiktoken":
+        return TiktokenCounter()
+    if name.startswith("tiktoken:"):
+        return TiktokenCounter(name.split(":", 1)[1])
+    raise ConfigError(
+        f"unknown token counter {spec!r}; use 'approx', 'tiktoken' or 'tiktoken:<encoding>'"
+    )
+
+
 def count_example_tokens(
     example: Example,
     counter: TokenCounter,

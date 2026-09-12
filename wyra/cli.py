@@ -62,6 +62,12 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--seed", type=int, default=42)
     build.add_argument("--per-chunk", type=int, default=None, help="examples per chunk (LLM)")
     build.add_argument("--max-tokens", type=int, default=None, help="drop examples above this")
+    build.add_argument(
+        "--tokens",
+        dest="token_counter",
+        default="approx",
+        help="how to count tokens: approx (default) or tiktoken, which needs wyra[tokens]",
+    )
     build.add_argument("--no-dedup", dest="dedupe", action="store_false")
     build.add_argument("--on-error", choices=("skip", "raise"), default="skip")
     build.add_argument("--lineage", dest="write_lineage", action="store_true")
@@ -72,6 +78,12 @@ def build_parser() -> argparse.ArgumentParser:
         "-f", "--format", dest="input_format", default="auto", choices=["auto", *sorted(FORMATS)]
     )
     validate.add_argument("--budget", type=int, default=16385, help="per-example token budget")
+    validate.add_argument(
+        "--tokens",
+        dest="token_counter",
+        default="approx",
+        help="how to count tokens: approx (default) or tiktoken, which needs wyra[tokens]",
+    )
 
     convert = subparsers.add_parser("convert", help="re-encode a dataset into another format")
     convert.add_argument("path")
@@ -145,6 +157,7 @@ def _build(args: argparse.Namespace) -> int:
         seed=args.seed,
         max_tokens=args.max_tokens,
         dedupe=args.dedupe,
+        token_counter=args.token_counter,
         on_error=args.on_error,
         write_lineage=args.write_lineage,
         **extra,
@@ -164,7 +177,12 @@ def _build(args: argparse.Namespace) -> int:
 
 
 def _validate(args: argparse.Namespace) -> int:
-    report = validate_jsonl(args.path, input_format=args.input_format, budget=args.budget)
+    report = validate_jsonl(
+        args.path,
+        input_format=args.input_format,
+        budget=args.budget,
+        counter=args.token_counter,
+    )
     print(report.summary())
     return EXIT_OK if report.ok else EXIT_INVALID
 
@@ -184,7 +202,7 @@ def _setup(args: argparse.Namespace) -> int:
 
     print("optional extras")
     for extra, module, purpose in (
-        ("tokens", "tiktoken", "exact token counts"),
+        ("tokens", "tiktoken", "exact token counts, via --tokens tiktoken"),
         ("openai", "openai", "OpenAI, Azure, vLLM, LM Studio, Groq"),
         ("gemini", "google.genai", "Google Gemini"),
         ("local", "onnxruntime_genai", "embedded model, no daemon and no key"),
