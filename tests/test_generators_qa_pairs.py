@@ -87,3 +87,16 @@ def test_describe_and_system_prompt() -> None:
 
 def test_empty_document() -> None:
     assert list(QAPairExtractor().generate(Document(""))) == []
+
+
+def test_a_question_spread_over_two_lines_is_joined() -> None:
+    doc = Document("Pergunta: O que é DRY\ne por que ele importa?\nResposta: Uma representação só.")
+    example = next(iter(QAPairExtractor(min_answer_chars=5).generate(doc)))
+    assert example.messages[0].content == "O que é DRY e por que ele importa?"
+
+
+def test_max_answer_blocks_must_be_at_least_one() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="max_answer_blocks"):
+        QAPairExtractor(max_answer_blocks=0)

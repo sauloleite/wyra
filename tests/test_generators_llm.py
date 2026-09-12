@@ -308,3 +308,18 @@ def test_a_halved_request_also_narrows_the_schema() -> None:
     list(QAPairGenerator(provider, prompts=PT_BR, per_chunk=4).generate(DOC))
     caps = [call.json_schema["properties"]["pairs"]["maxItems"] for call in provider.calls]
     assert caps == [4, 2]
+
+
+def test_extract_json_gives_up_on_braces_that_do_not_parse() -> None:
+    with pytest.raises(GenerationError, match="not JSON"):
+        extract_json("olha { isto nao e json } fim")
+    with pytest.raises(GenerationError, match="not JSON"):
+        extract_json("[ nem isto ]")
+
+
+def test_grounding_keeps_an_example_when_there_is_nothing_to_compare() -> None:
+    # no words of four letters or more on either side: the filter has no opinion
+    reply = json.dumps({"pairs": [{"question": "a?", "answer": "b c"}]}, ensure_ascii=False)
+    provider = FakeCompletionProvider(responses=[reply])
+    kept = list(QAPairGenerator(provider, min_grounding=0.9).generate(Document("x y z")))
+    assert len(kept) == 1

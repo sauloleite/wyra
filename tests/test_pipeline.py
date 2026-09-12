@@ -195,3 +195,17 @@ def test_a_compressed_dataset_converts(fixtures: Path, tmp_path: Path) -> None:
     packed.write_bytes(gzip.compress((fixtures / "sharegpt.jsonl").read_bytes()))
     result = convert_jsonl(packed, tmp_path / "out.jsonl")
     assert result.counts["kept"] == 2
+
+
+def test_a_provider_instance_can_be_passed_straight_in(tmp_path: Path) -> None:
+    provider = FakeCompletionProvider(responses=[PAIRS])
+    result = build_dataset(
+        Document("Um texto sobre a regra do escoteuro e o código limpo.", source="n.txt"),
+        tmp_path,
+        generator="llm-qa",
+        provider=provider,
+        lang="pt-br",
+    )
+    assert result.counts["kept"] == 1
+    assert len(provider.calls) == 1
+    assert result.manifest.generator["params"]["provider"] == "fake"

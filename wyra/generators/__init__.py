@@ -6,7 +6,7 @@ New generators register themselves without this module knowing about them, and w
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -84,10 +84,6 @@ def for_source(source: str | Path) -> str:
             f"{', '.join(available())} (plain prose usually means 'qa', 'continuation', "
             "'cloze', or an LLM-backed generator)"
         ) from None
-
-
-def describe_all(generators: list[ExampleGenerator]) -> Mapping[str, Any]:
-    return {g.name: dict(g.describe()) for g in generators}
 
 
 __all__ = [

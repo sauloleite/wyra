@@ -134,3 +134,12 @@ def test_gemini_reports_truncation_and_failures() -> None:
 def test_gemini_without_candidates_reports_no_finish_reason() -> None:
     response = SimpleNamespace(text="{}", usage_metadata=None, candidates=[])
     assert GeminiProvider(client=StubGemini(response)).complete(MESSAGES).finish_reason is None
+
+
+def test_a_candidate_without_a_finish_reason_reports_none() -> None:
+    response = SimpleNamespace(
+        text="{}",
+        usage_metadata=None,
+        candidates=[SimpleNamespace(finish_reason=None)],
+    )
+    assert GeminiProvider(client=StubGemini(response)).complete(MESSAGES).finish_reason is None

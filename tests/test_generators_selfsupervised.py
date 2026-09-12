@@ -83,3 +83,15 @@ def test_describe_reports_parameters() -> None:
     assert described["seed"] == 7 and described["system"] == "s"
     assert ContinuationGenerator().name == "continuation"
     assert ClozeGenerator().name == "cloze"
+
+
+def test_cloze_ignores_a_candidate_at_the_very_start_or_too_short() -> None:
+    # "Refatorar" opens the text and "DRY" is only three characters: neither becomes a blank
+    text = "Refatorar é um hábito diário do time inteiro, e isso aparece no código todo dia."
+    examples = list(ClozeGenerator(min_block_chars=10, max_per_block=5).generate(Document(text)))
+    assert all(
+        not e.messages[0].content.startswith(
+            "Preencha a lacuna marcada com ____ no texto a seguir.\n\n____"
+        )
+        for e in examples
+    )

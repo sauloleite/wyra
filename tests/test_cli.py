@@ -224,3 +224,88 @@ def test_validate_reads_a_compressed_dataset(fixtures: Path, tmp_path: Path, cap
     packed.write_bytes(gzip.compress((fixtures / "good.jsonl").read_bytes()))
     assert main(["validate", str(packed)]) == 0
     assert "3/3 valid" in capsys.readouterr().out
+
+
+def test_setup_reports_a_reachable_ollama(tmp_path: Path, monkeypatch, capsys) -> None:
+    from wyra.providers import ollama
+
+    monkeypatch.setattr(
+        ollama,
+        "probe",
+        lambda *a, **k: {
+            "host": "http://box:11434",
+            "version": "0.5.7",
+            "models": ["llama3.2:3b"],
+        },
+    )
+    main(["setup", "--cache-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "ollama   version 0.5.7 at http://box:11434" in out
+    assert "llama3.2:3b" in out
+    assert "too old" not in out
+
+
+def test_setup_warns_about_an_old_ollama(tmp_path: Path, monkeypatch, capsys) -> None:
+    from wyra.providers import ollama
+
+    monkeypatch.setattr(
+        ollama, "probe", lambda *a, **k: {"host": "h", "version": "0.4.2", "models": []}
+    )
+    main(["setup", "--cache-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "too old for JSON schemas" in out
+    assert "no models pulled yet" in out
+
+
+def test_setup_download_can_be_declined_at_the_prompt(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _: "n")
+    assert main(["setup", "--download", "qwen2.5-0.5b", "--cache-dir", str(tmp_path)]) == 0
+    assert "cancelled" in capsys.readouterr().out
+
+
+def test_setup_download_proceeds_when_accepted_at_the_prompt(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    from wyra.providers import modelstore
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _: "Y")
+    monkeypatch.setattr(modelstore, "fetch", lambda entry, **kw: tmp_path / entry.name)
+    assert main(["setup", "--download", "phi-3-mini", "--cache-dir", str(tmp_path)]) == 0
+    assert "ready:" in capsys.readouterr().out
+
+
+def test_build_passes_per_chunk_and_reports_skipped_chunks(tmp_path: Path, capsys) -> None:
+    import json
+
+    source = tmp_path / "prosa.txt"
+    source.write_text("Um parágrafo com conteúdo suficiente para virar um chunk.", encoding="utf-8")
+    code = main(
+        [
+            "build",
+            str(source),
+            "-o",
+            str(tmp_path / "out"),
+            "--generator",
+            "llm-qa",
+            "--provider",
+            "fake",
+            "--per-chunk",
+            "7",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert code == 1  # the canned fake reply yields nothing usable
+    assert "skipped 1 chunk(s)" in captured.err
+    manifest = json.loads((tmp_path / "out" / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["generator"]["params"]["per_chunk"] == 7
+    assert manifest["counts"]["errors"] == 1
+
+
+def test_installed_is_false_for_an_unusable_module_name() -> None:
+    from wyra.cli import _installed
+
+    assert _installed("wyra") is True
+    assert _installed("") is False
+    assert _installed("definitely_not_a_module_xyz") is False

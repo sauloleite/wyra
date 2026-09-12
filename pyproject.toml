@@ -83,3 +83,9 @@ addopts = "-m 'not live'"
 
 [tool.coverage.run]
 source = ["wyra"]
+
+[tool.coverage.report]
+# The suite covers every line today, including the lazy SDK imports and the per-platform
+# cache paths. A new line without a test should fail the build, not slip in.
+fail_under = 100
+show_missing = true

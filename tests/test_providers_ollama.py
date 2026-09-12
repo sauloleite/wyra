@@ -186,3 +186,82 @@ def test_other_bad_requests_are_still_provider_errors() -> None:
 )
 def test_supports_schema_reads_the_reported_version(version: str, capable: bool) -> None:
     assert supports_schema(version) is capable
+
+
+def probe_opener(version: Any = None, tags: Any = None, fail: str | None = None):
+    """Serve /api/version and /api/tags, optionally failing one of them."""
+
+    def opener(req: request.Request, timeout: float) -> Any:
+        if fail is not None and fail in req.full_url:
+            raise error.URLError("refused")
+        payload = version if "/api/version" in req.full_url else tags
+        return io.BytesIO(json.dumps(payload).encode())
+
+    return opener
+
+
+def test_probe_reports_the_version_and_the_models() -> None:
+    from wyra.providers.ollama import probe
+
+    info = probe(
+        "box:11434",
+        opener=probe_opener(
+            version={"version": "0.5.7"},
+            tags={"models": [{"name": "llama3.2:3b"}, {"name": "qwen2.5:0.5b"}]},
+        ),
+    )
+    assert info == {
+        "host": "http://box:11434",
+        "version": "0.5.7",
+        "models": ["llama3.2:3b", "qwen2.5:0.5b"],
+    }
+
+
+def test_probe_returns_none_when_the_daemon_is_down() -> None:
+    from wyra.providers.ollama import probe
+
+    assert probe(opener=probe_opener(fail="/api/version")) is None
+
+
+def test_probe_survives_a_broken_tags_endpoint() -> None:
+    from wyra.providers.ollama import probe
+
+    info = probe(opener=probe_opener(version={"version": "0.5.7"}, fail="/api/tags"))
+    assert info is not None and info["models"] == []
+
+    info = probe(opener=probe_opener(version={"version": "0.5.7"}, tags={"models": "junk"}))
+    assert info is not None and info["models"] == []
+
+    info = probe(opener=probe_opener(version={}, tags={"models": [{"size": 1}, {"name": "ok"}]}))
+    assert info is not None
+    assert info["version"] == "unknown"
+    assert info["models"] == ["ok"]
+
+
+def test_probe_handles_a_non_object_version_body() -> None:
+    from wyra.providers.ollama import probe
+
+    info = probe(opener=probe_opener(version=[1, 2], tags={"models": []}))
+    assert info is not None and info["version"] == "unknown"
+
+
+def test_an_error_body_without_an_error_key_is_passed_through() -> None:
+    def opener(req: request.Request, timeout: float) -> FakeResponse:
+        raise error.HTTPError(
+            req.full_url, 500, "Server Error", {}, io.BytesIO(b'{"detail": "something else"}')
+        )  # type: ignore[arg-type]
+
+    with pytest.raises(ProviderError, match="something else"):
+        OllamaProvider(opener=opener).complete(MESSAGES)
+
+
+def test_an_unreadable_error_body_falls_back_to_the_reason() -> None:
+    class Unreadable(error.HTTPError):
+        def read(self, *args: object) -> bytes:
+            raise OSError("socket gone")
+
+    def opener(req: request.Request, timeout: float) -> FakeResponse:
+        raise Unreadable(req.full_url, 502, "Bad Gateway", {}, None)  # type: ignore[arg-type]
+
+    with pytest.raises(ProviderError, match="HTTP 502"):
+        OllamaProvider(opener=opener).complete(MESSAGES)

@@ -147,3 +147,16 @@ def test_skip_invalid_logs_every_dropped_line(fixtures: Path, caplog) -> None:
     dropped = [record.getMessage() for record in caplog.records]
     assert len(dropped) == 10
     assert any("invalid JSON" in message for message in dropped)
+
+
+def test_a_missing_file_still_raises_file_not_found(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        list(read_jsonl_lines(tmp_path / "nope.jsonl"))
+
+
+def test_an_undetectable_format_names_the_line(tmp_path: Path) -> None:
+    path = tmp_path / "odd.jsonl"
+    path.write_text('{"text": "nem messages nem conversations"}\n', encoding="utf-8")
+    with pytest.raises(FormatError, match="odd.jsonl:1"):
+        list(read_examples(path))
+    assert list(read_examples(path, on_invalid="skip")) == []

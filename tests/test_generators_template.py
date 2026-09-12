@@ -100,3 +100,27 @@ def test_empty_source_and_describe() -> None:
         "system": "s",
         "skip_incomplete": False,
     }
+
+
+def test_a_file_without_an_extension_is_sniffed_as_csv() -> None:
+    doc = Document("pergunta,resposta\nq1?,r1\n", source="dados")
+    assert len(list(TemplateGenerator().generate(doc))) == 1
+
+
+def test_jsonl_tolerates_blank_lines_and_rejects_non_objects() -> None:
+    # the blank line has to be in the middle: the text is stripped at the edges first
+    good = Document(
+        '{"pergunta": "a?", "resposta": "r1"}\n\n{"pergunta": "b?", "resposta": "r2"}',
+        source="d.jsonl",
+    )
+    assert len(list(TemplateGenerator().generate(good))) == 2
+
+    with pytest.raises(FormatError, match="expected a JSON object"):
+        list(TemplateGenerator().generate(Document("[1, 2]\n", source="d.jsonl")))
+
+
+def test_a_json_file_that_is_not_an_array_is_reported() -> None:
+    with pytest.raises(FormatError, match="invalid JSON"):
+        list(TemplateGenerator().generate(Document("{oops", source="d.json")))
+    with pytest.raises(FormatError, match="array of objects"):
+        list(TemplateGenerator().generate(Document('{"pergunta": "q?"}', source="d.json")))
