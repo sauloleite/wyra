@@ -443,23 +443,6 @@ provider = FakeCompletionProvider(responses=['{"pairs": [{"question": "q?", "ans
 - **Small models write weak pairs.** The grounding filter and deduplication remove the
   worst, not the mediocre.
 
-## Migration from 0.0.x
-
-`FineTuningDataMaker` and `CryptoHandler` are gone in 0.1.0. The old
-`format_data(text)` call becomes:
-
-```python
-from wyra import build_dataset
-from wyra.generators import QAPairGenerator
-from wyra.providers import create
-
-build_dataset("notes.txt", out_dir="dataset", generator=QAPairGenerator(create("gemini")))
-```
-
-The API key now comes from `GEMINI_API_KEY`. **Versions up to 0.0.6 contained a hardcoded
-API key in the published package. If you ever installed one of them, that key is
-compromised and should be treated as such by whoever owns it.**
-
 ## License
 
 MIT. See [LICENSE](LICENSE).
